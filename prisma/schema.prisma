@@ -1,0 +1,344 @@
+// Prisma Schema for Tudy Platform
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER MODELS
+// ============================================
+
+model User {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  phone        String?  @unique
+  passwordHash String   @map("password_hash")
+  role         UserRole
+
+  firstName   String    @map("first_name")
+  lastName    String    @map("last_name")
+  avatarUrl   String?   @map("avatar_url")
+  gender      Gender?
+  dateOfBirth DateTime? @map("date_of_birth")
+
+  address  String?
+  city     String?
+  district String?
+  ward     String?
+  lat      Decimal? @db.Decimal(10, 8)
+  lng      Decimal? @db.Decimal(11, 8)
+
+  status        UserStatus @default(ACTIVE)
+  emailVerified Boolean    @default(false) @map("email_verified")
+  phoneVerified Boolean    @default(false) @map("phone_verified")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  // Relations
+  parent Parent?
+  tutor  Tutor?
+
+  @@index([email])
+  @@index([phone])
+  @@index([role])
+  @@index([status])
+  @@map("users")
+}
+
+model Parent {
+  id     Int @id @default(autoincrement())
+  userId Int @unique @map("user_id")
+
+  preferredCommunication String? @map("preferred_communication")
+  emergencyContactName   String? @map("emergency_contact_name")
+  emergencyContactPhone  String? @map("emergency_contact_phone")
+
+  referralCode String? @unique @map("referral_code")
+  referredBy   Int?    @map("referred_by")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  students Student[]
+  bookings Booking[]
+
+  @@index([userId])
+  @@index([referralCode])
+  @@map("parents")
+}
+
+model Tutor {
+  id     Int @id @default(autoincrement())
+  userId Int @unique @map("user_id")
+
+  bio           String?  @db.Text
+  videoIntroUrl String?  @map("video_intro_url")
+  university    String?
+  major         String?
+  year          Int?
+  studentIdCard String?  @map("student_id_card")
+  gpa           Decimal? @db.Decimal(3, 2)
+
+  englishLevel          String?  @map("english_level")
+  ieltsScore            Decimal? @map("ielts_score") @db.Decimal(2, 1)
+  englishCertificateUrl String?  @map("english_certificate_url")
+
+  applicationStatus  TutorStatus @default(PENDING) @map("application_status")
+  verificationStatus String?     @map("verification_status")
+
+  totalSessions     Int     @default(0) @map("total_sessions")
+  completedSessions Int     @default(0) @map("completed_sessions")
+  cancelledSessions Int     @default(0) @map("cancelled_sessions")
+  totalEarnings     Decimal @default(0) @map("total_earnings") @db.Decimal(15, 2)
+  averageRating     Decimal @default(0) @map("average_rating") @db.Decimal(2, 1)
+  totalReviews      Int     @default(0) @map("total_reviews")
+
+  bankAccountName   String? @map("bank_account_name")
+  bankAccountNumber String? @map("bank_account_number")
+  bankName          String? @map("bank_name")
+  bankBranch        String? @map("bank_branch")
+
+  teachingExperienceYears Int       @default(0) @map("teaching_experience_years")
+  backgroundCheckStatus   String?   @map("background_check_status")
+  backgroundCheckDate     DateTime? @map("background_check_date")
+
+  approvedAt DateTime? @map("approved_at")
+  approvedBy Int?      @map("approved_by")
+
+  isFeatured Boolean @default(false) @map("is_featured")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookings Booking[]
+
+  @@index([userId])
+  @@index([applicationStatus])
+  @@index([isFeatured])
+  @@map("tutors")
+}
+
+model Student {
+  id       Int @id @default(autoincrement())
+  parentId Int @map("parent_id")
+
+  firstName   String   @map("first_name")
+  lastName    String   @map("last_name")
+  nickname    String?
+  dateOfBirth DateTime @map("date_of_birth")
+  gender      Gender?
+  avatarUrl   String?  @map("avatar_url")
+
+  gradeLevel Int?    @map("grade_level")
+  schoolName String? @map("school_name")
+
+  learningStyle String? @map("learning_style")
+  specialNeeds  String? @map("special_needs") @db.Text
+  notes         String? @db.Text
+
+  isActive Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  parent   Parent    @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  bookings Booking[]
+
+  @@index([parentId])
+  @@index([dateOfBirth])
+  @@map("students")
+}
+
+// ============================================
+// PROGRAM & SUBJECT MODELS
+// ============================================
+
+model Program {
+  id     Int     @id @default(autoincrement())
+  name   String
+  nameEn String? @map("name_en")
+  slug   String  @unique
+
+  description String @db.Text
+  ageFrom     Int    @map("age_from")
+  ageTo       Int    @map("age_to")
+
+  pricePerSession Decimal @map("price_per_session") @db.Decimal(10, 2)
+  durationMinutes Int     @default(60) @map("duration_minutes")
+
+  status       ProgramStatus @default(ACTIVE)
+  thumbnailUrl String?       @map("thumbnail_url")
+
+  sortOrder  Int     @default(0) @map("sort_order")
+  isFeatured Boolean @default(false) @map("is_featured")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  subjects Subject[]
+  bookings Booking[]
+
+  @@index([slug])
+  @@index([status])
+  @@map("programs")
+}
+
+model Subject {
+  id        Int @id @default(autoincrement())
+  programId Int @map("program_id")
+
+  name   String
+  nameEn String? @map("name_en")
+  slug   String
+
+  description String? @db.Text
+  iconUrl     String? @map("icon_url")
+
+  sortOrder Int     @default(0) @map("sort_order")
+  isActive  Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  program  Program   @relation(fields: [programId], references: [id], onDelete: Cascade)
+  bookings Booking[]
+
+  @@unique([programId, slug])
+  @@index([programId])
+  @@map("subjects")
+}
+
+// ============================================
+// BOOKING & SESSION MODELS
+// ============================================
+
+model Booking {
+  id          Int    @id @default(autoincrement())
+  bookingCode String @unique @map("booking_code")
+
+  parentId  Int @map("parent_id")
+  studentId Int @map("student_id")
+  tutorId   Int @map("tutor_id")
+  programId Int @map("program_id")
+  subjectId Int @map("subject_id")
+
+  sessionType SessionType @default(REGULAR) @map("session_type")
+
+  scheduledDate   DateTime @map("scheduled_date")
+  scheduledTime   String   @map("scheduled_time")
+  durationMinutes Int      @default(60) @map("duration_minutes")
+
+  locationAddress String   @map("location_address")
+  locationLat     Decimal? @map("location_lat") @db.Decimal(10, 8)
+  locationLng     Decimal? @map("location_lng") @db.Decimal(11, 8)
+  locationNotes   String?  @map("location_notes") @db.Text
+
+  status BookingStatus @default(SCHEDULED)
+
+  totalPrice   Decimal  @map("total_price") @db.Decimal(10, 2)
+  platformFee  Decimal? @map("platform_fee") @db.Decimal(10, 2)
+  tutorEarning Decimal? @map("tutor_earning") @db.Decimal(10, 2)
+
+  checkInTime           DateTime? @map("check_in_time")
+  checkInPhotoUrl       String?   @map("check_in_photo_url")
+  checkOutTime          DateTime? @map("check_out_time")
+  actualDurationMinutes Int?      @map("actual_duration_minutes")
+
+  cancellationReason String?   @map("cancellation_reason") @db.Text
+  cancelledBy        Int?      @map("cancelled_by")
+  cancelledAt        DateTime? @map("cancelled_at")
+
+  parentNotes String? @map("parent_notes") @db.Text
+  tutorNotes  String? @map("tutor_notes") @db.Text
+  adminNotes  String? @map("admin_notes") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  parent  Parent  @relation(fields: [parentId], references: [id])
+  student Student @relation(fields: [studentId], references: [id])
+  tutor   Tutor   @relation(fields: [tutorId], references: [id])
+  program Program @relation(fields: [programId], references: [id])
+  subject Subject @relation(fields: [subjectId], references: [id])
+
+  @@index([bookingCode])
+  @@index([parentId])
+  @@index([studentId])
+  @@index([tutorId])
+  @@index([scheduledDate])
+  @@index([status])
+  @@map("bookings")
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum UserRole {
+  PARENT
+  TUTOR
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  BANNED
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum TutorStatus {
+  PENDING
+  UNDER_REVIEW
+  INTERVIEW_SCHEDULED
+  TRAINING
+  APPROVED
+  REJECTED
+  INACTIVE
+}
+
+enum ProgramStatus {
+  ACTIVE
+  INACTIVE
+  DRAFT
+}
+
+enum SessionType {
+  TRIAL
+  REGULAR
+  MAKEUP
+  ASSESSMENT
+}
+
+enum BookingStatus {
+  SCHEDULED
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED_BY_PARENT
+  CANCELLED_BY_TUTOR
+  CANCELLED_BY_ADMIN
+  NO_SHOW_PARENT
+  NO_SHOW_TUTOR
+  RESCHEDULED
+}
