@@ -1,8 +1,8 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { AppConfigService } from './config';
 import { BusinessExceptionFilter } from './common/filters/business-exception.filter';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
@@ -18,9 +18,10 @@ async function bootstrap() {
     logger: ['error', 'warn', 'log', 'debug', 'verbose'],
   });
 
-  const configService = app.get(ConfigService);
-  const port = configService.get<number>('PORT', 3000);
-  const nodeEnv = configService.get<string>('NODE_ENV', 'development');
+  const appConfig = app.get(AppConfigService);
+  const config = appConfig.getConfig();
+  const port = config.port;
+  const nodeEnv = config.nodeEnv;
 
   // Security
   app.use(helmet());
@@ -34,7 +35,7 @@ async function bootstrap() {
   });
 
   // Global prefix
-  app.setGlobalPrefix('api/v1');
+  app.setGlobalPrefix(config.apiPrefix);
 
   // Global validation pipe
   app.useGlobalPipes(

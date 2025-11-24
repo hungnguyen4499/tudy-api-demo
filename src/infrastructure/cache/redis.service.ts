@@ -1,5 +1,5 @@
 import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { RedisConfigService } from '@/config';
 import Redis from 'ioredis';
 
 /**
@@ -11,15 +11,17 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RedisService.name);
   private client: Redis;
 
-  constructor(private configService: ConfigService) {}
+  constructor(private redisConfig: RedisConfigService) {}
 
   async onModuleInit() {
     try {
+      const config = this.redisConfig.getConfig();
+      
       this.client = new Redis({
-        host: this.configService.get<string>('REDIS_HOST', 'localhost'),
-        port: this.configService.get<number>('REDIS_PORT', 6379),
-        password: this.configService.get<string>('REDIS_PASSWORD'),
-        db: this.configService.get<number>('REDIS_DB', 0),
+        host: config.host,
+        port: config.port,
+        password: config.password,
+        db: config.db,
         retryStrategy: (times) => {
           const delay = Math.min(times * 50, 2000);
           return delay;

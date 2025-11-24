@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { ConfigService } from '@nestjs/config';
+import { JWTConfigService } from '@/config';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '@/infrastructure';
 import { BusinessException } from '@/common/exceptions/business.exception';
@@ -13,7 +13,7 @@ export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
-    private configService: ConfigService,
+    private jwtConfig: JWTConfigService,
   ) {}
 
   /**
@@ -149,35 +149,25 @@ export class AuthService {
       role,
     };
 
-    const expiresIn = this.configService.get<string>('JWT_EXPIRES_IN', '1d');
-    const refreshExpiresIn = this.configService.get<string>(
-      'JWT_REFRESH_EXPIRES_IN',
-      '7d',
-    );
-    const jwtSecret = this.configService.get<string>('JWT_SECRET');
-    const refreshSecret = this.configService.get<string>('JWT_REFRESH_SECRET');
-
-    if (!jwtSecret || !refreshSecret) {
-      throw new Error('JWT secrets are not configured');
-    }
+    const config = this.jwtConfig.getConfig();
 
     // Sign tokens with explicit secrets and expiry
     const accessToken = this.jwtService.sign(payload, {
-      secret: jwtSecret,
-      expiresIn,
+      secret: config.secret,
+      expiresIn: config.expiresIn,
     } as any);
 
     const refreshToken = this.jwtService.sign(payload, {
-      secret: refreshSecret,
-      expiresIn: refreshExpiresIn,
+      secret: config.refreshSecret,
+      expiresIn: config.refreshExpiresIn,
     } as any);
 
-    // Calculate expiry dates (already declared above)
+    // Calculate expiry dates
     return {
       accessToken,
       refreshToken,
-      expiresIn: this.calculateExpiry(expiresIn),
-      refreshExpiresIn: this.calculateExpiry(refreshExpiresIn),
+      expiresIn: this.calculateExpiry(config.expiresIn),
+      refreshExpiresIn: this.calculateExpiry(config.refreshExpiresIn),
     };
   }
 
