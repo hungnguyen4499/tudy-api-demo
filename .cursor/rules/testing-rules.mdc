@@ -1,0 +1,35 @@
+---
+description: Testing Rules - Testing standards and patterns
+globs: ["**/*.spec.ts", "**/*.test.ts", "**/test/**"]
+alwaysApply: false
+---
+
+# Testing Rules
+
+## Test Pyramid
+- Unit (70%): services, utils
+- Integration (20%): API, modules
+- E2E (10%): critical flows
+
+## File Structure
+- Unit: {name}.service.spec.ts (alongside source)
+- E2E: test/{name}.e2e-spec.ts
+
+## Naming
+- describe('ClassName') → describe('methodName') → it('should...')
+
+## Pattern (AAA)
+- Arrange (Given): setup mocks, data
+- Act (When): call method
+- Assert (Then): verify results
+
+## Coverage
+- Minimum: 80% overall
+- Critical paths: 100%
+- Focus on business logic
+
+## Best Practices
+- One assertion focus per test
+- Isolate tests (no shared state)
+- Test edge cases and errors
+- Keep tests fast and deterministic

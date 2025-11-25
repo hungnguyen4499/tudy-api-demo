@@ -1,0 +1,42 @@
+---
+description: Security Rules - Security best practices
+globs: ["**/auth/**", "**/guards/**"]
+alwaysApply: false
+---
+
+# Security Rules
+
+## Authentication
+- JWT with short expiration (15-30min)
+- Refresh token rotation
+- httpOnly cookies for tokens
+- Strong secrets (256+ bits)
+
+## Password
+- bcrypt hash (cost 12+)
+- Never store plaintext
+- Rate limit login attempts
+- Lock after failed attempts
+
+## Authorization
+- RBAC/ABAC with guards
+- Validate resource ownership
+- Principle of least privilege
+- Check permissions at service layer
+
+## Input Validation
+- Whitelist validation
+- Parameterized queries (no SQL injection)
+- Escape output (prevent XSS)
+- Validate file uploads
+
+## Sensitive Data
+- Never log passwords/tokens/PII
+- Encrypt at rest, HTTPS in transit
+- Mask in responses
+- Secure env variables
+
+## Headers
+- Enable Helmet (security headers)
+- Configure CORS properly
+- Rate limiting (429 responses)

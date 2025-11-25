@@ -1,0 +1,54 @@
+---
+description: NestJS Rules - NestJS framework specific standards
+globs: ["**/*.ts"]
+alwaysApply: false
+---
+
+# NestJS Rules
+
+## Project Structure
+- common/: shared utilities, decorators, dto, exceptions, filters, guards
+- config/: config classes (app.config.ts, database.config.ts)
+- infrastructure/: external services (database/, redis/, file/)
+- modules/{name}/: controllers/, services/, repositories/, dto/, entities/, mappers/
+
+## Naming
+- Module: UsersModule, Service: UsersService, Controller: UsersController
+- Repository: UsersRepository, Guard: JwtAuthGuard
+- Request DTO: CreateUserRequest, Response DTO: UserResponse
+- Entity: User, Mapper: UserMapper
+
+## Dependency Injection
+- Constructor injection with private readonly
+- Use @Inject('TOKEN') for interface injection
+
+## Validation
+- Global ValidationPipe: whitelist, forbidNonWhitelisted, transform
+- class-validator decorators on DTOs
+
+## Exception Handling
+- Three-tier: BusinessExceptionFilter → HttpExceptionFilter → AllExceptionsFilter
+- Use BusinessException(ErrorCodes.XXX)
+- ErrorCode: { code, message, httpStatus }
+
+## Response Pattern
+- Result.success(data) for success
+- Format: { code, message, data }
+
+## Guards & Decorators
+- @CurrentUser() for user extraction
+- @Roles() + RolesGuard for authorization
+- @Public() for public routes
+- @Permission() + PermissionGuard for authorization
+
+## Swagger
+- @ApiTags, @ApiOperation, @ApiResponse on controllers
+- @ApiProperty on DTOs
+
+## Config
+- ConfigService injection via custom ConfigClasses
+- Type-safe getters with defaults
+
+## Logging
+- Logger(ClassName.name)
+- log(), warn(), error() with context

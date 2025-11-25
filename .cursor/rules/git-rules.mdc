@@ -1,0 +1,28 @@
+---
+description: Git Rules - Git workflow and conventions
+globs: ["**/*"]
+alwaysApply: false
+---
+
+# Git Rules
+
+## Branch Naming
+- feature/{ticket}-{desc}, fix/{ticket}-{desc}
+- hotfix/{desc}, release/v{version}, refactor/{area}
+
+## Commits (Conventional)
+- Format: `type(scope): subject`
+- Types: feat, fix, docs, style, refactor, perf, test, chore
+- Subject: max 50 chars, imperative mood
+- Footer: reference issues (Closes #123)
+
+## Pull Request
+- Title: conventional commit format
+- Size: < 400 lines preferred
+- All tests must pass
+- Require 1+ approval
+- Squash if messy commits
+
+## Branch Protection
+- main: protected, require PR
+- Delete branches after merge

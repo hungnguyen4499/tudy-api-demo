@@ -1,0 +1,30 @@
+---
+description: API Design - RESTful API standards
+globs: ["**/controllers/**", "**/routes/**"]
+alwaysApply: false
+---
+
+# API Design
+
+## RESTful Endpoints
+- GET /{resources} (list), GET /{resources}/:id (get one)
+- POST /{resources} (create), PUT/PATCH /:id (update), DELETE /:id
+- Nested: GET /users/:userId/orders
+- Actions: POST /:id/activate
+
+## Response Format
+- Success: { code, message, data }
+- Error: { code, message, data: null }
+- Paginated: { code, data: { items, total, page, limit } }
+
+## Query Parameters
+- Pagination: ?page=1&limit=10
+- Sorting: ?sortBy=field&sortOrder=desc
+- Filtering: ?status=active&role=admin
+- Search: ?search=keyword
+
+## Best Practices
+- Plural nouns, kebab-case URLs
+- Version APIs (/api/v1/)
+- Validate all inputs
+- Document with OpenAPI/Swagger

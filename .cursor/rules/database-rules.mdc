@@ -1,0 +1,39 @@
+---
+description: Database Rules - Database design and ORM patterns
+globs: ["**/*.prisma", "**/repositories/**", "**/entities/**"]
+alwaysApply: false
+---
+
+# Database Rules
+
+## Naming (Prisma)
+- Model: PascalCase singular (User)
+- Table: snake_case plural via @@map("users")
+- Field: camelCase → snake_case via @map("first_name")
+- Enum: PascalCase (UserRole)
+
+## Relationships
+- One-to-One: @unique on FK
+- One-to-Many: array on parent, FK on child
+- Many-to-Many: explicit join table with composite PK
+
+## Indexes
+- Always index foreign keys
+- Index frequently queried fields
+- Composite indexes for common query patterns
+
+## Best Practices
+- Soft delete (deletedAt field)
+- Transactions for multi-table ops
+- Paginate all list queries
+- Select only needed fields
+- Avoid N+1 (use includes/joins)
+
+## Repository Pattern
+- Return Entity, not Prisma model
+- Use Mapper.toEntity() before returning
+- Filter soft-deleted by default
+
+## Migrations
+- Dev: prisma migrate dev --name {name}
+- Prod: prisma migrate deploy

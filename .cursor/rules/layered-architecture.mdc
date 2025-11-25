@@ -1,0 +1,35 @@
+---
+description: Layered Architecture - Clean architecture patterns
+globs: ["**/*.ts", "**/*.java"]
+alwaysApply: false
+---
+
+# Layered Architecture
+
+## Layers (top to bottom)
+- Controller → Service → Repository → Database
+
+## Request Flow
+- Request → Validation → Guard → Controller → Service → Repository → DB
+
+## Response Flow
+- DB → Repository → Service → Controller → Client
+
+## Layer Responsibilities
+- **Controller**: HTTP only, no business logic, call service, return Result
+- **Service**: Business rules, validation, transactions
+- **Repository**: DB queries only, return Entity (not DB model)
+- **Entity**: Domain model, business methods, computed properties
+
+## Mapper (between layers)
+- Use Mapper to convert objects between layers
+- DB Model → Entity (in Repository)
+- Entity → Response DTO (in Service)
+- Request DTO → Entity/CreateData (in Service)
+- Keep mapping logic separate from business logic
+
+## Rules
+- Dependencies flow downward only
+- Never skip layers (Controller → Repository ❌)
+- Each layer has own models (DTO, Entity, DB Model)
+- Use interfaces for DI

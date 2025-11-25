@@ -1,0 +1,35 @@
+---
+description: Common Coding Style - Universal coding standards
+globs: ["**/*"]
+alwaysApply: false
+---
+
+# Common Coding Style
+
+## Naming
+- Variables/Functions: camelCase
+- Constants: UPPER_SNAKE_CASE
+- Classes/Types: PascalCase
+- Files: kebab-case
+- Booleans: is/has/can/should prefix
+
+## Code Organization
+- One class/component per file
+- Group imports: external → internal → relative
+- Public methods before private
+- Max function: 30-50 lines, max file: 300-500 lines
+
+## Principles
+- Single Responsibility (SRP)
+- DRY, KISS, early return
+- Avoid magic numbers (use constants)
+
+## Error Handling
+- Never swallow exceptions
+- Log with context and stack trace
+- Fail fast, fail loud
+
+## Logging
+- Use appropriate levels (debug/info/warn/error)
+- Include context (IDs, request info)
+- Never log sensitive data

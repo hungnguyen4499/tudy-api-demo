@@ -1,0 +1,41 @@
+---
+description: TypeScript Rules - TypeScript specific standards
+globs: ["**/*.ts", "**/*.tsx"]
+alwaysApply: false
+---
+
+# TypeScript Rules
+
+## Type Safety
+- Always explicit types, avoid `any`
+- Use `unknown` when type is truly unknown
+- Enable strict mode in tsconfig
+- Use type guards for narrowing
+
+## Types & Interfaces
+- Interfaces for object shapes
+- Types for unions/intersections
+- Enums for fixed values (string enums preferred)
+
+## Null Safety
+- Use optional chaining `?.`
+- Use nullish coalescing `??`
+- Avoid non-null assertion `!` when possible
+
+## Functions
+- Explicit return types
+- Arrow functions for callbacks
+- Default parameters over undefined checks
+
+## Generics
+- Use for reusable type-safe functions
+- Apply constraints with `extends`
+
+## Async
+- Prefer async/await over .then()
+- Always try/catch async operations
+- Use Promise.all() for parallel ops
+
+## Imports
+- Use named imports (avoid default exports)
+- Use `import type` for type-only imports
