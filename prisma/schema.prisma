@@ -267,7 +267,7 @@ model Role {
   displayName String  @map("display_name") // e.g., "Administrator", "Partner Owner"
   description String? @db.Text
 
-  dataScope ScopeType @default(USER) @map("data_scope") // GLOBAL, ORGANIZATION, or USER - what data can users with this role access?
+  dataScope DataScopeType @default(USER) @map("data_scope") // GLOBAL, ORGANIZATION, or USER - what data can users with this role access?
   isSystem  Boolean   @default(false) @map("is_system") // System roles cannot be modified/deleted
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -1024,7 +1024,7 @@ enum OrganizationStatus {
   INACTIVE
 }
 
-enum ScopeType {
+enum DataScopeType {
   GLOBAL // Platform admins - see all data
   ORGANIZATION // Partners/tutors - see only their org
   USER // Parents - see only their own data

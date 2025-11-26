@@ -10,6 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '@/common/guards/permissions.guard';
 import { RequirePermission } from '@/common/decorators/permissions.decorator';
@@ -36,6 +37,13 @@ export class RolesController {
   @Get()
   findAll() {
     return this.rolesService.findAll();
+  }
+
+  @ApiOperation({ summary: 'Get assignable roles for current user' })
+  @RequirePermission('member.manage')
+  @Get('assignable')
+  async getAssignableRoles(@CurrentUser() user: { userId: number }) {
+    return this.rolesService.getAssignableRoles(user.userId);
   }
 
   @ApiOperation({ summary: 'Get role by ID' })
@@ -97,5 +105,35 @@ export class RolesController {
     @Body() request: AssignMenusRequest,
   ) {
     return this.rolesService.assignMenus(id, request.menuIds);
+  }
+
+  // ============================================
+  // User Assignment to Role (Admin only)
+  // ============================================
+
+  @ApiOperation({ summary: 'Assign user to role' })
+  @RequirePermission('member.manage')
+  @Post(':id/users/:userId')
+  async assignUserToRole(
+    @CurrentUser() user: { userId: number },
+    @Param('id', ParseIntPipe) roleId: number,
+    @Param('userId', ParseIntPipe) targetUserId: number,
+  ) {
+    await this.rolesService.assignRoleToUser(user.userId, targetUserId, roleId);
+  }
+
+  @ApiOperation({ summary: 'Remove user from role' })
+  @RequirePermission('member.manage')
+  @Delete(':id/users/:userId')
+  async removeUserFromRole(
+    @CurrentUser() user: { userId: number },
+    @Param('id', ParseIntPipe) roleId: number,
+    @Param('userId', ParseIntPipe) targetUserId: number,
+  ) {
+    await this.rolesService.removeRoleFromUser(
+      user.userId,
+      targetUserId,
+      roleId,
+    );
   }
 }

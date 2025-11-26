@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsString, IsEnum, IsOptional } from 'class-validator';
-import { ScopeType } from '@prisma/client';
+import { DataScopeType } from '@/common/constants';
 
 /**
  * Create Role Request DTO
@@ -20,11 +20,11 @@ export class CreateRoleRequest {
   description?: string;
 
   @ApiProperty({
-    enum: ['GLOBAL', 'ORGANIZATION', 'USER'],
-    example: 'ORGANIZATION',
+    enum: DataScopeType,
+    example: DataScopeType.ORGANIZATION,
     description: 'What data can users with this role access?',
   })
-  @IsEnum(ScopeType)
-  dataScope: ScopeType;
+  @IsEnum(DataScopeType)
+  dataScope: DataScopeType;
 }
 

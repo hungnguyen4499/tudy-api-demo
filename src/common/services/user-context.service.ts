@@ -1,21 +1,47 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '@/infrastructure';
 import { RedisService } from '@/infrastructure';
+import { DataScopeType } from '@/common/constants';
 
 export interface UserContext {
   userId: number;
   role: string;
+  roles: string[];
   organizationId: number | null;
   tutorId: number | null;
   permissions: string[];
   menuCodes: string[];
-  dataScope: 'GLOBAL' | 'ORGANIZATION' | 'USER'; // Determined from user roles (Role.dataScope)
+  dataScope: DataScopeType;
 }
+
+// Type for Prisma query result
+type UserWithContext = {
+  id: number;
+  status: string;
+  organizationMember: { organizationId: number } | null;
+  tutor: { id: number } | null;
+  userRoles: Array<{
+    expiresAt: Date | null;
+    role: {
+      id: number;
+      name: string;
+      dataScope: DataScopeType;
+      permissions: Array<{
+        permission: { code: string };
+      }>;
+      menus: Array<{
+        menu: { code: string };
+      }>;
+    };
+  }>;
+};
+
+type UserRole = UserWithContext['userRoles'][number];
 
 @Injectable()
 export class UserContextService {
   private readonly logger = new Logger(UserContextService.name);
-  private readonly CACHE_TTL = 300; // 5 minutes
+  private readonly CACHE_TTL = 300;
   private readonly CACHE_PREFIX = 'user:context:';
 
   constructor(
@@ -23,100 +49,118 @@ export class UserContextService {
     private readonly redis: RedisService,
   ) {}
 
-  /**
-   * Load complete user context with permissions and menus
-   * Uses Redis cache for performance
-   */
   async loadContext(userId: number): Promise<UserContext> {
-    // Try cache first
     const cached = await this.getCachedContext(userId);
     if (cached) {
       this.logger.debug(`Context loaded from cache for user ${userId}`);
       return cached;
     }
 
-    // Load from database
     this.logger.debug(`Loading context from DB for user ${userId}`);
     const context = await this.loadContextFromDatabase(userId);
-
-    // Cache for future requests
     await this.setCachedContext(userId, context);
 
     return context;
   }
 
-  /**
-   * Load user context from database
-   */
   private async loadContextFromDatabase(userId: number): Promise<UserContext> {
-    // Load user with all related data
-    const user = await this.prisma.user.findUnique({
+    const user = (await this.prisma.user.findUnique({
       where: { id: userId },
-      include: {
+      select: {
+        id: true,
+        status: true,
         organizationMember: {
-          include: {
-            organization: true,
+          select: {
+            organizationId: true,
           },
         },
-        tutor: true,
+        tutor: {
+          select: {
+            id: true,
+          },
+        },
         userRoles: {
-          include: {
+          select: {
+            expiresAt: true,
             role: {
-              include: {
+              select: {
+                id: true,
+                name: true,
+                dataScope: true,
                 permissions: {
-                  include: {
-                    permission: true,
+                  select: {
+                    permission: {
+                      select: {
+                        code: true,
+                      },
+                    },
                   },
                 },
                 menus: {
-                  include: {
-                    menu: true,
+                  select: {
+                    menu: {
+                      select: {
+                        code: true,
+                      },
+                    },
                   },
                 },
               },
             },
           },
+          orderBy: {
+            assignedAt: 'desc',
+          },
         },
       },
-    });
+    })) as UserWithContext | null;
 
     if (!user) {
       throw new Error(`User ${userId} not found`);
     }
 
-    // Extract permissions from user roles
-    const permissions = this.extractPermissions(user.userRoles);
+    if (user.status !== 'ACTIVE') {
+      throw new Error(`User ${userId} is not active`);
+    }
 
-    // Extract menu codes from user roles
-    const menuCodes = this.extractMenuCodes(user.userRoles);
+    const activeUserRoles = this.getActiveUserRoles(user.userRoles);
 
-    // Determine data scope from user roles (highest scope wins)
-    const dataScope = this.determineDataScope(user.userRoles);
+    if (activeUserRoles.length === 0) {
+      throw new Error(`User ${userId} has no active roles`);
+    }
 
-    // Get primary role name from UserRole
-    const primaryUserRole = user.userRoles.find(
+    return this.buildUserContext(user, activeUserRoles);
+  }
+
+  private getActiveUserRoles(userRoles: UserRole[]): UserRole[] {
+    return userRoles.filter(
       (ur) => !ur.expiresAt || ur.expiresAt > new Date(),
     );
-    const roleName = primaryUserRole?.role.name || 'parent'; // Default fallback
+  }
 
-    // Build context
-    const context: UserContext = {
+  private buildUserContext(
+    user: UserWithContext,
+    activeUserRoles: UserRole[],
+  ): UserContext {
+    const permissions = this.extractPermissions(activeUserRoles);
+    const menuCodes = this.extractMenuCodes(activeUserRoles);
+    const dataScope = this.determineDataScope(activeUserRoles);
+    const roleNames = activeUserRoles.map((ur) => ur.role.name);
+    const primaryRoleName = activeUserRoles[0]?.role.name ?? 'parent';
+
+    return {
       userId: user.id,
-      role: roleName,
-      organizationId: user.organizationMember?.organizationId || null,
-      tutorId: user.tutor?.id || null,
+      role: primaryRoleName,
+      roles: roleNames,
+      organizationId: user.organizationMember?.organizationId ?? null,
+      tutorId: user.tutor?.id ?? null,
       permissions,
       menuCodes,
       dataScope,
     };
-
-    return context;
   }
 
-  /**
-   * Extract unique permissions from user roles
-   */
-  private extractPermissions(userRoles: any[]): string[] {
+  private extractPermissions(userRoles: UserRole[]): string[] {
     const permissionSet = new Set<string>();
 
     for (const userRole of userRoles) {
@@ -128,10 +172,7 @@ export class UserContextService {
     return Array.from(permissionSet);
   }
 
-  /**
-   * Extract unique menu codes from user roles
-   */
-  private extractMenuCodes(userRoles: any[]): string[] {
+  private extractMenuCodes(userRoles: UserRole[]): string[] {
     const menuCodeSet = new Set<string>();
 
     for (const userRole of userRoles) {
@@ -143,35 +184,25 @@ export class UserContextService {
     return Array.from(menuCodeSet);
   }
 
-  /**
-   * Determine data scope from user roles
-   * Priority: GLOBAL > ORGANIZATION > USER
-   * If user has multiple roles, highest scope wins
-   */
-  private determineDataScope(
-    userRoles: any[],
-  ): 'GLOBAL' | 'ORGANIZATION' | 'USER' {
+  private determineDataScope(userRoles: UserRole[]): DataScopeType {
     if (userRoles.length === 0) {
-      return 'USER'; // Default: most restrictive
+      return DataScopeType.USER;
     }
 
-    // Get all data scopes from assigned roles
     const dataScopes = userRoles.map((userRole) => userRole.role.dataScope);
 
-    // Priority: GLOBAL > ORGANIZATION > USER
-    if (dataScopes.includes('GLOBAL')) {
-      return 'GLOBAL';
+    if (dataScopes.includes(DataScopeType.GLOBAL)) {
+      return DataScopeType.GLOBAL;
     }
-    if (dataScopes.includes('ORGANIZATION')) {
-      return 'ORGANIZATION';
+    if (dataScopes.includes(DataScopeType.ORGANIZATION)) {
+      return DataScopeType.ORGANIZATION;
     }
-    return 'USER';
+    return DataScopeType.USER;
   }
 
-  /**
-   * Get cached context from Redis
-   */
-  private async getCachedContext(userId: number): Promise<UserContext | null> {
+  private async getCachedContext(
+    userId: number,
+  ): Promise<UserContext | null> {
     try {
       const key = this.getCacheKey(userId);
       const cached = await this.redis.get(key);
@@ -180,7 +211,7 @@ export class UserContextService {
         return null;
       }
 
-      return JSON.parse(cached);
+      return JSON.parse(cached) as UserContext;
     } catch (error) {
       this.logger.warn(
         `Failed to get cached context for user ${userId}:`,
@@ -190,9 +221,6 @@ export class UserContextService {
     }
   }
 
-  /**
-   * Cache context in Redis
-   */
   private async setCachedContext(
     userId: number,
     context: UserContext,
@@ -202,13 +230,9 @@ export class UserContextService {
       await this.redis.set(key, JSON.stringify(context), this.CACHE_TTL);
     } catch (error) {
       this.logger.warn(`Failed to cache context for user ${userId}:`, error);
-      // Don't throw - caching is not critical
     }
   }
 
-  /**
-   * Invalidate cached context (call when permissions/roles change)
-   */
   async invalidateContext(userId: number): Promise<void> {
     try {
       const key = this.getCacheKey(userId);
@@ -222,31 +246,19 @@ export class UserContextService {
     }
   }
 
-  /**
-   * Invalidate context for multiple users
-   */
   async invalidateContexts(userIds: number[]): Promise<void> {
     await Promise.all(userIds.map((id) => this.invalidateContext(id)));
   }
 
-  /**
-   * Generate cache key
-   */
   private getCacheKey(userId: number): string {
     return `${this.CACHE_PREFIX}${userId}`;
   }
 
-  /**
-   * Load only permissions (lightweight)
-   */
   async loadPermissions(userId: number): Promise<string[]> {
     const context = await this.loadContext(userId);
     return context.permissions;
   }
 
-  /**
-   * Load only menu codes (lightweight)
-   */
   async loadMenuCodes(userId: number): Promise<string[]> {
     const context = await this.loadContext(userId);
     return context.menuCodes;

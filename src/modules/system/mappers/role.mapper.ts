@@ -4,6 +4,7 @@ import { Role } from '../entities/role.entity';
 import { RoleResponse, RoleDetailResponse, AssignedUserResponse } from '../dto';
 import { PermissionMapper } from './permission.mapper';
 import { MenuMapper } from './menu.mapper';
+import { DataScopeType } from '@/common/constants';
 
 type PrismaRoleWithRelations = PrismaRole & {
   permissions?: Array<{ permission: PrismaPermission }>;
@@ -31,6 +32,7 @@ export class RoleMapper {
       name: prismaRole.name,
       displayName: prismaRole.displayName,
       description: prismaRole.description,
+      dataScope: prismaRole.dataScope,
       isSystem: prismaRole.isSystem,
       createdAt: prismaRole.createdAt,
       updatedAt: prismaRole.updatedAt,

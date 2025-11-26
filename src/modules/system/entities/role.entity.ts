@@ -1,5 +1,6 @@
 import { Permission } from './permission.entity';
 import { Menu } from './menu.entity';
+import { DataScopeType } from '@/common/constants';
 
 /**
  * Role Entity - Domain model
@@ -9,6 +10,7 @@ export class Role {
   readonly name: string;
   readonly displayName: string;
   readonly description: string | null;
+  readonly dataScope: DataScopeType;
   readonly isSystem: boolean;
   readonly createdAt: Date;
   readonly updatedAt: Date;
@@ -23,6 +25,7 @@ export class Role {
     name: string;
     displayName: string;
     description: string | null;
+    dataScope: DataScopeType;
     isSystem: boolean;
     createdAt: Date;
     updatedAt: Date;
@@ -34,6 +37,7 @@ export class Role {
     this.name = props.name;
     this.displayName = props.displayName;
     this.description = props.description;
+    this.dataScope = props.dataScope;
     this.isSystem = props.isSystem;
     this.createdAt = props.createdAt;
     this.updatedAt = props.updatedAt;

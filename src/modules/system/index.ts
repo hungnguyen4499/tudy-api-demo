@@ -29,8 +29,5 @@ export * from './services/permission.service';
 export * from './services/menu.service';
 
 // Common services (exported globally)
-export {
-  DataScopeContext,
-  DataScopeType,
-} from '@/common/services/data-scope-context.service';
+export { DataScopeContext } from '@/common/services/data-scope-context.service';
 export { UserContextService } from '@/common/services/user-context.service';

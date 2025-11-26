@@ -3,6 +3,7 @@ import {
   NestInterceptor,
   ExecutionContext,
   CallHandler,
+  Logger,
 } from '@nestjs/common';
 import { ModuleRef, ContextIdFactory } from '@nestjs/core';
 import { Observable } from 'rxjs';
@@ -15,6 +16,8 @@ import { DataScopeContext, UserContextService } from '@/common/services';
  */
 @Injectable()
 export class DataScopeInterceptor implements NestInterceptor {
+  private readonly logger = new Logger(DataScopeInterceptor.name);
+
   constructor(
     private readonly moduleRef: ModuleRef,
     private readonly userContextService: UserContextService,
@@ -44,25 +47,16 @@ export class DataScopeInterceptor implements NestInterceptor {
 
         // Initialize data scope context
         dataScopeContext.initialize(userContext);
-      } catch {
-        // If context loading fails, create minimal context from JWT data
-        // Default to USER data scope (most restrictive) if we can't load from DB
-        const minimalContext = {
-          userId: user.userId,
-          role: user.role || 'PARENT',
-          organizationId: user.organizationId || null,
-          tutorId: user.tutorId || null,
-          permissions: [],
-          menuCodes: [],
-          dataScope: 'USER' as const, // Default to most restrictive
-        };
-        const contextId = ContextIdFactory.getByRequest(request);
-        const dataScopeContext = await this.moduleRef.resolve(
-          DataScopeContext,
-          contextId,
-          { strict: false },
+      } catch (error) {
+        // If context loading fails, throw error - user context is required
+        // This ensures user validation (status, roles) happens in UserContextService
+        this.logger.error(
+          `Failed to load user context for user ${user.userId}:`,
+          error,
         );
-        dataScopeContext.initialize(minimalContext);
+        throw new Error(
+          `Failed to load user context: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        );
       }
     }
 

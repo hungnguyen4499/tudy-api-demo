@@ -1,22 +1,36 @@
-import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  Logger,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { UserRole } from '@/common/constants';
 import { BusinessException } from '@/common/exceptions/business.exception';
 import { ErrorCodes } from '@/common/constants';
+import { UserContextService } from '@/common/services/user-context.service';
 
 /**
  * Roles Guard
  * Checks if user has required role(s)
+ * 
+ * OPTIMIZATION: Uses UserContextService to load roles (cached)
+ * instead of relying on JWT Strategy data
  */
 @Injectable()
 export class RolesGuard implements CanActivate {
-  constructor(private reflector: Reflector) {}
+  private readonly logger = new Logger(RolesGuard.name);
 
-  canActivate(context: ExecutionContext): boolean {
-    const requiredRoles = this.reflector.getAllAndOverride<UserRole[]>('roles', [
-      context.getHandler(),
-      context.getClass(),
-    ]);
+  constructor(
+    private reflector: Reflector,
+    private userContextService: UserContextService,
+  ) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const requiredRoles = this.reflector.getAllAndOverride<UserRole[]>(
+      'roles',
+      [context.getHandler(), context.getClass()],
+    );
 
     if (!requiredRoles || requiredRoles.length === 0) {
       return true;
@@ -25,17 +39,32 @@ export class RolesGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
     const user = request.user;
 
-    if (!user) {
+    if (!user || !user.userId) {
       throw new BusinessException(ErrorCodes.UNAUTHORIZED);
     }
 
-    const hasRole = requiredRoles.some((role) => user.role === role);
+    try {
+      // Load user context (with Redis caching)
+      const userContext = await this.userContextService.loadContext(
+        user.userId,
+      );
 
-    if (!hasRole) {
-      throw new BusinessException(ErrorCodes.INSUFFICIENT_PERMISSIONS);
+      // Check if user has ANY of the required roles
+      const hasRole = requiredRoles.some((role) =>
+        userContext.roles.includes(role),
+      );
+
+      if (!hasRole) {
+        throw new BusinessException(ErrorCodes.INSUFFICIENT_PERMISSIONS);
+      }
+
+      return true;
+    } catch (error) {
+      if (error instanceof BusinessException) {
+        throw error;
+      }
+      this.logger.error('Error checking roles:', error);
+      throw new BusinessException(ErrorCodes.UNAUTHORIZED);
     }
-
-    return true;
   }
 }
-

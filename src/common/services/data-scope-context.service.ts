@@ -1,14 +1,6 @@
 import { Injectable, Scope } from '@nestjs/common';
 import { UserContext } from './user-context.service';
-
-/**
- * Data Scope Type - determines data access level
- */
-export enum DataScopeType {
-  GLOBAL = 'GLOBAL', // Platform admins - see all data
-  ORGANIZATION = 'ORGANIZATION', // Partners/tutors - see only their org
-  USER = 'USER', // Parents - see only their own data
-}
+import { DataScopeType } from '@/common/constants';
 
 /**
  * Data Scope Context Service
@@ -31,7 +23,7 @@ export class DataScopeContext {
   initialize(context: UserContext): void {
     this._context = context;
     // Use dataScope from UserContext (loaded from Role.dataScope in database)
-    this._type = this.mapDataScopeType(context.dataScope);
+    this._type = context.dataScope;
   }
 
   /**
@@ -74,11 +66,11 @@ export class DataScopeContext {
   }
 
   /**
-   * Get user role
+   * Get all user roles (multi-role support)
    */
-  get role(): string {
+  get roles(): string[] {
     this.ensureInitialized();
-    return this._context!.role;
+    return this._context!.roles;
   }
 
   /**
@@ -200,24 +192,6 @@ export class DataScopeContext {
     }
 
     return false;
-  }
-
-  /**
-   * Map data scope type string from UserContext to DataScopeType enum
-   * UserContext.dataScope comes from Role.dataScope in database
-   */
-  private mapDataScopeType(dataScope: string): DataScopeType {
-    switch (dataScope) {
-      case 'GLOBAL':
-        return DataScopeType.GLOBAL;
-      case 'ORGANIZATION':
-        return DataScopeType.ORGANIZATION;
-      case 'USER':
-        return DataScopeType.USER;
-      default:
-        // Fallback to most restrictive
-        return DataScopeType.USER;
-    }
   }
 
   /**

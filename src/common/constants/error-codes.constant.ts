@@ -275,6 +275,26 @@ export const SystemErrors = {
     message: 'User has no role assignment',
     httpStatus: 400,
   },
+  ROLE_ALREADY_ASSIGNED: {
+    code: 'ROLE_ALREADY_ASSIGNED',
+    message: 'Role is already assigned to this user',
+    httpStatus: 409,
+  },
+  CANNOT_ASSIGN_GLOBAL_ROLE: {
+    code: 'CANNOT_ASSIGN_GLOBAL_ROLE',
+    message: 'Cannot assign global scope role',
+    httpStatus: 403,
+  },
+  CANNOT_ASSIGN_ROLE_DIFFERENT_ORG: {
+    code: 'CANNOT_ASSIGN_ROLE_DIFFERENT_ORG',
+    message: 'Cannot assign role to user from different organization',
+    httpStatus: 403,
+  },
+  INSUFFICIENT_SCOPE_TO_ASSIGN_ROLE: {
+    code: 'INSUFFICIENT_SCOPE_TO_ASSIGN_ROLE',
+    message: 'Insufficient data scope to assign this role',
+    httpStatus: 403,
+  },
 
   // Permission errors
   PERMISSION_NOT_FOUND: {

@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { ErrorCodes } from '../constants/error-codes.constant';
+import { ErrorCodes } from '@/common/constants';
 
 /**
  * Standard API Response Structure
@@ -24,7 +24,11 @@ export class Result<T = any> {
    * Create success response
    */
   static success<T>(data?: T): Result<T> {
-    return new Result(ErrorCodes.SUCCESS.code, ErrorCodes.SUCCESS.message, data);
+    return new Result(
+      ErrorCodes.SUCCESS.code,
+      ErrorCodes.SUCCESS.message,
+      data,
+    );
   }
 
   /**
@@ -48,4 +52,3 @@ export class Result<T = any> {
     return new Result(code, message, data);
   }
 }
-

@@ -3,6 +3,7 @@ import { PrismaService } from '@/infrastructure/db/prisma.service';
 import { RoleMapper } from '../mappers/role.mapper';
 import { Role } from '../entities/role.entity';
 import { CreateRoleRequest, UpdateRoleRequest } from '../dto';
+import { DataScopeType } from '@/common/constants';
 
 /**
  * Roles Repository - Database access layer
@@ -251,5 +252,106 @@ export class RolesRepository {
     });
 
     return userRoles.map((ur) => ur.userId);
+  }
+
+  /**
+   * Check if role is assigned to user
+   */
+  async isRoleAssignedToUser(userId: number, roleId: number): Promise<boolean> {
+    const userRole = await this.prisma.userRole.findUnique({
+      where: {
+        userId_roleId: {
+          userId,
+          roleId,
+        },
+      },
+    });
+
+    return userRole !== null;
+  }
+
+  /**
+   * Assign role to user
+   */
+  async assignRoleToUser(
+    userId: number,
+    roleId: number,
+    assignedBy: number,
+  ): Promise<void> {
+    await this.prisma.userRole.create({
+      data: {
+        userId,
+        roleId,
+        assignedBy,
+        assignedAt: new Date(),
+      },
+    });
+  }
+
+  /**
+   * Remove role from user
+   */
+  async removeRoleFromUser(userId: number, roleId: number): Promise<void> {
+    await this.prisma.userRole.delete({
+      where: {
+        userId_roleId: {
+          userId,
+          roleId,
+        },
+      },
+    });
+  }
+
+  /**
+   * Find roles by data scope (for filtering assignable roles)
+   * 
+   * Scope rules:
+   * - GLOBAL: can assign GLOBAL, ORGANIZATION, USER roles
+   * - ORGANIZATION: can only assign ORGANIZATION roles (not USER)
+   * - USER: cannot assign any roles
+   */
+  async findByDataScope(maxScope: DataScopeType): Promise<Role[]> {
+    let allowedScopes: DataScopeType[];
+
+    if (maxScope === DataScopeType.GLOBAL) {
+      // GLOBAL can assign all scopes
+      allowedScopes = [DataScopeType.GLOBAL, DataScopeType.ORGANIZATION, DataScopeType.USER];
+    } else if (maxScope === DataScopeType.ORGANIZATION) {
+      // ORGANIZATION can only assign ORGANIZATION scope roles
+      allowedScopes = [DataScopeType.ORGANIZATION];
+    } else {
+      // USER cannot assign any roles (should not reach here)
+      allowedScopes = [];
+    }
+
+    const roles = await this.prisma.role.findMany({
+      where: {
+        dataScope: {
+          in: allowedScopes,
+        },
+      },
+      include: {
+        permissions: {
+          include: {
+            permission: true,
+          },
+        },
+        menus: {
+          include: {
+            menu: true,
+          },
+        },
+        _count: {
+          select: {
+            userRoles: true,
+          },
+        },
+      },
+      orderBy: {
+        name: 'asc',
+      },
+    });
+
+    return this.mapper.toEntityList(roles);
   }
 }
