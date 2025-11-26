@@ -12,11 +12,26 @@ alwaysApply: false
 - infrastructure/: external services (database/, redis/, file/)
 - modules/{name}/: controllers/, services/, repositories/, dto/, entities/, mappers/
 
+## Layered Architecture
+- Layers: Controller → Service → Repository → Database
+- Request: Request → Validation → Guard → Controller → Service → Repository → DB
+- Response: DB → Repository (Entity) → Service (Response DTO) → Controller → Client
+- Dependencies flow downward only, never skip layers
+
+## Layer Responsibilities
+- Controller: HTTP only, thin, no business logic, call service
+- Service: Business rules, validation, transactions, use mapper for Entity → DTO
+- Repository: DB queries only, return Entity (not DB model), use mapper for DB → Entity
+- Entity: Domain model, business methods, computed properties
+- Mapper: Convert between layers (DB ↔ Entity ↔ DTO)
+
 ## Naming
 - Module: UsersModule, Service: UsersService, Controller: UsersController
 - Repository: UsersRepository, Guard: JwtAuthGuard
-- Request DTO: CreateUserRequest, Response DTO: UserResponse
-- Entity: User, Mapper: UserMapper
+- Entity: User → user.entity.ts
+- Mapper: UserMapper → user.mapper.ts
+- Request DTO: CreateUserRequest → create-user-request.dto.ts
+- Response DTO: UserResponse → user-response.dto.ts
 
 ## Dependency Injection
 - Constructor injection with private readonly
@@ -25,11 +40,12 @@ alwaysApply: false
 ## Validation
 - Global ValidationPipe: whitelist, forbidNonWhitelisted, transform
 - class-validator decorators on DTOs
+- @ApiProperty/@ApiPropertyOptional on DTO properties
 
 ## Exception Handling
 - Three-tier: BusinessExceptionFilter → HttpExceptionFilter → AllExceptionsFilter
-- Use BusinessException(ErrorCodes.XXX)
-- ErrorCode: { code, message, httpStatus }
+- Use BusinessException(ErrorCodes.XXX) in service layers
+- ErrorCode: { code, message, httpStatus }, create new ErrorCode if not exists
 
 ## Response Pattern
 - Result.success(data) for success
@@ -39,15 +55,12 @@ alwaysApply: false
 - @CurrentUser() for user extraction
 - @Roles() + RolesGuard for authorization
 - @Public() for public routes
-- @Permission() + PermissionGuard for authorization
+- @RequirePermission() + PermissionsGuard for authorization
 
 ## Swagger
-- @ApiTags, @ApiOperation, @ApiResponse on controllers
+- @ApiTags, @ApiOperation on controllers
 - @ApiProperty on DTOs
-
-## Config
-- ConfigService injection via custom ConfigClasses
-- Type-safe getters with defaults
+- Skip @ApiResponse, @HttpCode (keep controllers thin)
 
 ## Logging
 - Logger(ClassName.name)

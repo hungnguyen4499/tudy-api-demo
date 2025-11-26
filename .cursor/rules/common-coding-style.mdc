@@ -1,7 +1,7 @@
 ---
 description: Common Coding Style - Universal coding standards
 globs: ["**/*"]
-alwaysApply: false
+alwaysApply: true
 ---
 
 # Common Coding Style
