@@ -356,7 +356,6 @@ model Menu {
   // UI Properties
   type      MenuType // MENU, BUTTON, TAB
   name      String // Display name
-  nameEn    String?  @map("name_en")
   icon      String? // Icon name (e.g., "ProductIcon", "fa-plus")
   path      String? // Route path for MENU type (e.g., "/products")
   component String? // Component name (e.g., "ProductList", "ProductForm")

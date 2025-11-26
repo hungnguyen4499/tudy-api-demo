@@ -24,7 +24,7 @@ Request
          │
          ▼
 ┌─────────────────┐
-│ ScopeInterceptor│ ─── Loads UserContext (Redis cached)
+│ DataScopeInterceptor│ ─── Loads UserContext (Redis cached)
 │                 │     Initializes DataScopeContext
 └────────┬────────┘
          │
@@ -293,13 +293,13 @@ async findProducts(query: ProductsQueryDto) {
 
 ### Per-Request Overhead
 
-| Step | Time | Cached? |
-|------|------|---------|
-| ScopeInterceptor instantiation | ~0.1ms | No (request-scoped) |
-| UserContextService.loadContext() | ~1-5ms | **Yes (Redis, 5 min TTL)** |
-| DataScopeContext.initialize() | ~0.01ms | N/A |
-| **Total (cache hit)** | **~1-2ms** | - |
-| **Total (cache miss)** | **~10-30ms** | - |
+| Step                               | Time | Cached? |
+|------------------------------------|------|---------|
+| DataScopeInterceptor instantiation | ~0.1ms | No (request-scoped) |
+| UserContextService.loadContext()   | ~1-5ms | **Yes (Redis, 5 min TTL)** |
+| DataScopeContext.initialize()      | ~0.01ms | N/A |
+| **Total (cache hit)**              | **~1-2ms** | - |
+| **Total (cache miss)**             | **~10-30ms** | - |
 
 ### Memory Footprint
 
@@ -425,7 +425,7 @@ src/common/
 │   ├── data-scope-context.service.ts   # Main DataScopeContext class
 │   └── user-context.service.ts    # Loads/caches user permissions
 ├── interceptors/
-│   └── scope.interceptor.ts       # Initializes DataScopeContext per request
+│   └── data-scope.interceptor.ts  # Initializes DataScopeContext per request
 ```
 
 ---

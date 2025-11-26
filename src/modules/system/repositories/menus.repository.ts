@@ -161,7 +161,6 @@ export class MenusRepository {
         code: data.code,
         type: data.type,
         name: data.name,
-        nameEn: data.nameEn,
         icon: data.icon,
         path: data.path,
         component: data.component,
@@ -189,7 +188,6 @@ export class MenusRepository {
       where: { id },
       data: {
         name: data.name,
-        nameEn: data.nameEn,
         icon: data.icon,
         path: data.path,
         component: data.component,

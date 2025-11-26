@@ -8,7 +8,7 @@ import { PrismaService } from '@/infrastructure/db/prisma.service';
 /**
  * JWT Strategy
  * Validates JWT tokens and extracts basic user info
- * Full context loading and scope initialization is handled by ScopeInterceptor
+ * Full context loading and scope initialization is handled by DataScopeInterceptor
  */
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -53,7 +53,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
 
     // Get primary role from UserRole (use role from JWT payload as fallback)
-    // Full context (permissions, menuCodes) is loaded by ScopeInterceptor
+    // Full context (permissions, menuCodes) is loaded by DataScopeInterceptor
     const roleName = payload.role || 'parent'; // Fallback to parent if not in payload
 
     return {

@@ -1,6 +1,12 @@
 import { Injectable } from '@nestjs/common';
+import { BusinessException } from '@/common/exceptions/business.exception';
+import { SystemErrors } from '@/common/constants/error-codes.constant';
 import { UserContextService } from '@/common/services/user-context.service';
-import { MenuResponse } from '../dto';
+import {
+  CreateMenuRequest,
+  MenuResponse,
+  UpdateMenuRequest,
+} from '../dto';
 import { MenusRepository } from '../repositories/menus.repository';
 import { MenuMapper } from '../mappers/menu.mapper';
 import { Menu } from '../entities/menu.entity';
@@ -12,6 +18,10 @@ export class MenuService {
     private readonly userContextService: UserContextService,
     private readonly menuMapper: MenuMapper,
   ) {}
+
+  // --------------------------------------------------------
+  // User-facing helpers (current user's menus & permissions)
+  // --------------------------------------------------------
 
   async getUserMenus(userId: number): Promise<MenuResponse[]> {
     const menuCodes = await this.userContextService.loadMenuCodes(userId);
@@ -56,6 +66,102 @@ export class MenuService {
 
   async getMenuCodesByPermission(permissionCode: string): Promise<string[]> {
     return this.menusRepository.findCodesByPermission(permissionCode);
+  }
+
+  // --------------------------------------------------------
+  // Administrative operations (CRUD & configuration)
+  // --------------------------------------------------------
+
+  async findAll(): Promise<MenuResponse[]> {
+    const menus = await this.menusRepository.findAll();
+    return this.menuMapper.toResponseList(menus);
+  }
+
+  async getMenuTree(): Promise<MenuResponse[]> {
+    const menus = await this.menusRepository.findTree();
+    return this.menuMapper.toResponseList(menus);
+  }
+
+  async findOne(id: number): Promise<MenuResponse> {
+    const menu = await this.menusRepository.findById(id);
+    if (!menu) {
+      throw new BusinessException(SystemErrors.MENU_NOT_FOUND);
+    }
+    return this.menuMapper.toResponse(menu);
+  }
+
+  async create(request: CreateMenuRequest): Promise<MenuResponse> {
+    const existing = await this.menusRepository.findByCode(request.code);
+    if (existing) {
+      throw new BusinessException(SystemErrors.MENU_CODE_EXISTS);
+    }
+
+    if (request.parentId) {
+      const parent = await this.menusRepository.findById(request.parentId);
+      if (!parent) {
+        throw new BusinessException(SystemErrors.MENU_PARENT_NOT_FOUND);
+      }
+    }
+
+    const menu = await this.menusRepository.create(request);
+    return this.menuMapper.toResponse(menu);
+  }
+
+  async update(id: number, request: UpdateMenuRequest): Promise<MenuResponse> {
+    const menu = await this.menusRepository.findById(id);
+    if (!menu) {
+      throw new BusinessException(SystemErrors.MENU_NOT_FOUND);
+    }
+
+    if (request.parentId) {
+      if (request.parentId === id) {
+        throw new BusinessException(SystemErrors.MENU_SELF_PARENT);
+      }
+
+      const parent = await this.menusRepository.findById(request.parentId);
+      if (!parent) {
+        throw new BusinessException(SystemErrors.MENU_PARENT_NOT_FOUND);
+      }
+    }
+
+    const updated = await this.menusRepository.update(id, request);
+    return this.menuMapper.toResponse(updated);
+  }
+
+  async delete(id: number): Promise<void> {
+    const result = await this.menusRepository.findByIdWithCounts(id);
+    if (!result) {
+      throw new BusinessException(SystemErrors.MENU_NOT_FOUND);
+    }
+
+    if (result.childrenCount > 0) {
+      throw new BusinessException(
+        SystemErrors.MENU_HAS_CHILDREN,
+        `Cannot delete: menu has ${result.childrenCount} child menus`,
+      );
+    }
+
+    await this.menusRepository.delete(id);
+  }
+
+  async updateOrder(id: number, sortOrder: number): Promise<MenuResponse> {
+    const menu = await this.menusRepository.findById(id);
+    if (!menu) {
+      throw new BusinessException(SystemErrors.MENU_NOT_FOUND);
+    }
+
+    const updated = await this.menusRepository.updateSortOrder(id, sortOrder);
+    return this.menuMapper.toResponse(updated);
+  }
+
+  async toggleVisibility(id: number, isVisible: boolean): Promise<MenuResponse> {
+    const menu = await this.menusRepository.findById(id);
+    if (!menu) {
+      throw new BusinessException(SystemErrors.MENU_NOT_FOUND);
+    }
+
+    const updated = await this.menusRepository.updateVisibility(id, isVisible);
+    return this.menuMapper.toResponse(updated);
   }
 
   private buildMenuResponseTree(menus: Menu[]): MenuResponse[] {

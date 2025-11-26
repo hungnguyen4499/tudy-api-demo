@@ -354,7 +354,7 @@ enum MenuType {
 - ✅ Metadata for extra configuration
 
 **Why each column stays:**
-- `nameEn`, `icon`, `path`, `component` keep the admin UI multilingual and decoupled from hardcoded routes/components.
+- `icon`, `path`, `component` keep the admin UI decoupled from hardcoded routes/components.
 - `parentId` + `sortOrder` allow the backend to assemble trees in a predictable order for any client (web/mobile).
 - `isVisible` vs `isEnabled` separates hiding a feature from disabling it while showing a tooltip.
 - `permissionId` connects RBAC to UI elements without duplicating permission codes in frontends.
@@ -428,7 +428,7 @@ model RoleMenu {
 | Add new button | Code change + deploy | Insert DB row |
 | Change menu order | Code change | Update sortOrder |
 | Role-based UI | Hardcoded checks | Load from DB |
-| Multi-language | Hardcoded translations | Store nameEn field |
+| Multi-language | Hardcoded translations | Use metadata/localization keys |
 | A/B testing | Feature flags | Toggle isVisible |
 
 **Example: Frontend Usage**
@@ -487,7 +487,7 @@ enum ScopeType {
    - Loads all `UserRole` rows for the user
    - Aggregates `Role.dataScope` (priority: `GLOBAL` > `ORGANIZATION` > `USER`)
    - Resolves `organizationId` from `OrganizationMember` (if any)
-3. **DataScopeContext** (request-scoped) is initialized by `ScopeInterceptor` using `UserContext.dataScope`
+3. **DataScopeContext** (request-scoped) is initialized by `DataScopeInterceptor` using `UserContext.dataScope`
 4. **Repositories** rely on `DataScopeContext` helpers:
    ```typescript
    // Products for organization members

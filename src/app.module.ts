@@ -20,7 +20,7 @@ import { FilesModule } from '@/modules/files/files.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 
 // Interceptors
-import { ScopeInterceptor } from './common/interceptors/scope.interceptor';
+import { DataScopeInterceptor } from './common/interceptors/data-scope.interceptor';
 
 // Services
 import { DataScopeContext } from './common/services/data-scope-context.service';
@@ -60,7 +60,7 @@ import { DataScopeContext } from './common/services/data-scope-context.service';
     // Global Scope Interceptor - initializes scope for authenticated requests
     {
       provide: APP_INTERCEPTOR,
-      useClass: ScopeInterceptor,
+      useClass: DataScopeInterceptor,
     },
   ],
 })

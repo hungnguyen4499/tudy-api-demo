@@ -1,12 +1,38 @@
 import { Injectable } from '@nestjs/common';
-import { Menu as PrismaMenu, Permission as PrismaPermission } from '@prisma/client';
 import { Menu } from '../entities/menu.entity';
 import { MenuResponse } from '../dto';
 import { PermissionMapper } from './permission.mapper';
 
-type PrismaMenuWithRelations = PrismaMenu & {
+type PrismaPermissionLike = {
+  id: number;
+  code: string;
+  resource: string;
+  action: string;
+  displayName: string;
+  description: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+type PrismaMenuWithRelations = {
+  id: number;
+  code: string;
+  type: 'MENU' | 'BUTTON' | 'TAB';
+  name: string;
+  icon: string | null;
+  path: string | null;
+  component: string | null;
+  parentId: number | null;
+  permissionId: number | null;
+  sortOrder: number;
+  isVisible: boolean;
+  isEnabled: boolean;
+  description: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: Date;
+  updatedAt: Date;
   children?: PrismaMenuWithRelations[];
-  permission?: PrismaPermission | null;
+  permission?: PrismaPermissionLike | null;
 };
 
 /**
@@ -26,7 +52,6 @@ export class MenuMapper {
       code: prismaMenu.code,
       type: prismaMenu.type as 'MENU' | 'BUTTON' | 'TAB',
       name: prismaMenu.name,
-      nameEn: prismaMenu.nameEn,
       icon: prismaMenu.icon,
       path: prismaMenu.path,
       component: prismaMenu.component,
@@ -55,7 +80,6 @@ export class MenuMapper {
       code: entity.code,
       type: entity.type,
       name: entity.name,
-      nameEn: entity.nameEn,
       icon: entity.icon,
       path: entity.path,
       component: entity.component,

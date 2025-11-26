@@ -25,10 +25,12 @@ export * from './repositories';
 // Services (business logic)
 export * from './services/roles.service';
 export * from './services/permissions.service';
-export * from './services/menus-admin.service';
 export * from './services/permission.service';
 export * from './services/menu.service';
 
 // Common services (exported globally)
-export { DataScopeContext, DataScopeType } from '@/common/services/data-scope-context.service';
+export {
+  DataScopeContext,
+  DataScopeType,
+} from '@/common/services/data-scope-context.service';
 export { UserContextService } from '@/common/services/user-context.service';

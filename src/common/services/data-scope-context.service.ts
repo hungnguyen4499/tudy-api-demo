@@ -25,7 +25,7 @@ export class DataScopeContext {
 
   /**
    * Initialize data scope from user context
-   * Called by ScopeInterceptor after authentication
+   * Called by DataScopeInterceptor after authentication
    * DataScope is loaded from database (Role.dataScope) via UserContext
    */
   initialize(context: UserContext): void {
@@ -108,7 +108,9 @@ export class DataScopeContext {
    * Apply data scope filter to a base query filter
    * Used in repositories to automatically filter data by scope
    */
-  applyFilter(baseFilter: Record<string, unknown> = {}): Record<string, unknown> {
+  applyFilter(
+    baseFilter: Record<string, unknown> = {},
+  ): Record<string, unknown> {
     switch (this.type) {
       case DataScopeType.GLOBAL:
         return baseFilter; // No additional filters
@@ -223,8 +225,9 @@ export class DataScopeContext {
    */
   private ensureInitialized(): void {
     if (!this._context || !this._type) {
-      throw new Error('DataScopeContext not initialized. Ensure ScopeInterceptor is applied.');
+      throw new Error(
+        'DataScopeContext not initialized. Ensure DataScopeInterceptor is applied.',
+      );
     }
   }
 }
-

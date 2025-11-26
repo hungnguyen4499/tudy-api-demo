@@ -5,22 +5,20 @@ import { CacheModule } from '@/infrastructure/cache/cache.module';
 // Controllers
 import { RolesController } from './controllers/roles.controller';
 import { PermissionsController } from './controllers/permissions.controller';
-import { MenusAdminController } from './controllers/menus-admin.controller';
 import { MenusController } from './controllers/menus.controller';
 
 // Services
 import { RolesService } from './services/roles.service';
 import { PermissionsService } from './services/permissions.service';
-import { MenusAdminService } from './services/menus-admin.service';
 
 // Repositories
-import { RolesRepository } from './repositories/roles.repository';
-import { PermissionsRepository } from './repositories/permissions.repository';
-import { MenusRepository } from './repositories/menus.repository';
+import { RolesRepository } from '@/modules/system/repositories';
+import { PermissionsRepository } from '@/modules/system/repositories';
+import { MenusRepository } from '@/modules/system/repositories';
 
 // Mappers
 import { RoleMapper } from './mappers/role.mapper';
-import { PermissionMapper } from './mappers/permission.mapper';
+import { PermissionMapper } from '@/modules/system/mappers';
 import { MenuMapper } from './mappers/menu.mapper';
 
 // Common Services
@@ -38,7 +36,7 @@ import { UserContextService } from '@/common/services/user-context.service';
  *
  * Note: Scope-based access control is handled via:
  * - DataScopeContext service (common/services)
- * - ScopeInterceptor (registered globally in AppModule)
+ * - DataScopeInterceptor (registered globally in AppModule)
  *
  * Architecture follows layered pattern:
  * Controller → Service → Repository → Database
@@ -48,12 +46,7 @@ import { UserContextService } from '@/common/services/user-context.service';
 @Global()
 @Module({
   imports: [DbModule, CacheModule],
-  controllers: [
-    RolesController,
-    PermissionsController,
-    MenusAdminController,
-    MenusController,
-  ],
+  controllers: [RolesController, PermissionsController, MenusController],
   providers: [
     // Mappers (shared across layers, order matters for DI)
     PermissionMapper,
@@ -68,7 +61,6 @@ import { UserContextService } from '@/common/services/user-context.service';
     // Services (business logic layer)
     RolesService,
     PermissionsService,
-    MenusAdminService,
 
     // Common authorization services
     PermissionService,

@@ -53,7 +53,9 @@ export class Role {
    * Check if role can be deleted
    */
   canDelete(): boolean {
-    return !this.isSystem && (this.usersCount === undefined || this.usersCount === 0);
+    return (
+      !this.isSystem && (this.usersCount === undefined || this.usersCount === 0)
+    );
   }
 
   /**

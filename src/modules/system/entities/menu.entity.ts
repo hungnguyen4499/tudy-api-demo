@@ -8,7 +8,6 @@ export class Menu {
   readonly code: string;
   readonly type: 'MENU' | 'BUTTON' | 'TAB';
   readonly name: string;
-  readonly nameEn: string | null;
   readonly icon: string | null;
   readonly path: string | null;
   readonly component: string | null;
@@ -31,7 +30,6 @@ export class Menu {
     code: string;
     type: 'MENU' | 'BUTTON' | 'TAB';
     name: string;
-    nameEn: string | null;
     icon: string | null;
     path: string | null;
     component: string | null;
@@ -51,7 +49,6 @@ export class Menu {
     this.code = props.code;
     this.type = props.type;
     this.name = props.name;
-    this.nameEn = props.nameEn;
     this.icon = props.icon;
     this.path = props.path;
     this.component = props.component;

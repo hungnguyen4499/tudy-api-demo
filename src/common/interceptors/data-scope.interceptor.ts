@@ -14,7 +14,7 @@ import { DataScopeContext, UserContextService } from '@/common/services';
  * Works alongside JwtAuthGuard - runs after authentication
  */
 @Injectable()
-export class ScopeInterceptor implements NestInterceptor {
+export class DataScopeInterceptor implements NestInterceptor {
   constructor(
     private readonly moduleRef: ModuleRef,
     private readonly userContextService: UserContextService,
@@ -31,7 +31,9 @@ export class ScopeInterceptor implements NestInterceptor {
     if (user?.userId) {
       try {
         // Load full user context (with Redis caching)
-        const userContext = await this.userContextService.loadContext(user.userId);
+        const userContext = await this.userContextService.loadContext(
+          user.userId,
+        );
 
         const contextId = ContextIdFactory.getByRequest(request);
         const dataScopeContext = await this.moduleRef.resolve(

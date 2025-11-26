@@ -18,9 +18,6 @@ export class MenuResponse {
   name: string;
 
   @ApiPropertyOptional()
-  nameEn: string | null;
-
-  @ApiPropertyOptional()
   icon: string | null;
 
   @ApiPropertyOptional()
@@ -59,4 +56,3 @@ export class MenuResponse {
   @ApiProperty()
   updatedAt: Date;
 }
-

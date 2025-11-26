@@ -17,11 +17,6 @@ export class CreateMenuRequest {
   @IsString()
   name: string;
 
-  @ApiPropertyOptional({ example: 'Reports' })
-  @IsString()
-  @IsOptional()
-  nameEn?: string;
-
   @ApiPropertyOptional({ example: 'ChartBarIcon' })
   @IsString()
   @IsOptional()

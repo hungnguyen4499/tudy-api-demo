@@ -66,7 +66,6 @@ model Menu {
   // UI Properties
   type      MenuType // MENU | BUTTON | TAB
   name      String   // "Products", "Add Product"
-  nameEn    String?
   icon      String?  // "ProductIcon", "fa-plus"
   path      String?  // "/products" (for MENU type)
   component String?  // "ProductList" (React component name)
@@ -754,7 +753,6 @@ async function seedMenusAndPermissions() {
       code: 'menu.products',
       type: 'MENU',
       name: 'Products',
-      nameEn: 'Products',
       icon: 'ProductIcon',
       path: '/products',
       component: 'ProductList',
@@ -770,7 +768,6 @@ async function seedMenusAndPermissions() {
         code: 'btn.product.create',
         type: 'BUTTON',
         name: 'Add Product',
-        nameEn: 'Add Product',
         icon: 'PlusIcon',
         permissionId: productCreate.id,
         parentId: productsMenu.id,
@@ -780,7 +777,6 @@ async function seedMenusAndPermissions() {
         code: 'btn.product.edit',
         type: 'BUTTON',
         name: 'Edit',
-        nameEn: 'Edit',
         icon: 'EditIcon',
         permissionId: productUpdate.id,
         parentId: productsMenu.id,
@@ -790,7 +786,6 @@ async function seedMenusAndPermissions() {
         code: 'btn.product.delete',
         type: 'BUTTON',
         name: 'Delete',
-        nameEn: 'Delete',
         icon: 'DeleteIcon',
         permissionId: productDelete.id,
         parentId: productsMenu.id,
@@ -800,7 +795,6 @@ async function seedMenusAndPermissions() {
         code: 'btn.product.export',
         type: 'BUTTON',
         name: 'Export',
-        nameEn: 'Export',
         icon: 'DownloadIcon',
         permissionId: productExport.id,
         parentId: productsMenu.id,

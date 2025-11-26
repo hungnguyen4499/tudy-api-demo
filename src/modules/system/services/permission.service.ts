@@ -7,19 +7,28 @@ export class PermissionService {
 
   constructor(private readonly userContextService: UserContextService) {}
 
-  async hasPermission(userId: number, requiredPermission: string): Promise<boolean> {
+  async hasPermission(
+    userId: number,
+    requiredPermission: string,
+  ): Promise<boolean> {
     const permissions = await this.userContextService.loadPermissions(userId);
     return this.checkPermission(permissions, requiredPermission);
   }
 
-  async hasAllPermissions(userId: number, requiredPermissions: string[]): Promise<boolean> {
+  async hasAllPermissions(
+    userId: number,
+    requiredPermissions: string[],
+  ): Promise<boolean> {
     const permissions = await this.userContextService.loadPermissions(userId);
     return requiredPermissions.every((required) =>
       this.checkPermission(permissions, required),
     );
   }
 
-  async hasAnyPermission(userId: number, requiredPermissions: string[]): Promise<boolean> {
+  async hasAnyPermission(
+    userId: number,
+    requiredPermissions: string[],
+  ): Promise<boolean> {
     const permissions = await this.userContextService.loadPermissions(userId);
     return requiredPermissions.some((required) =>
       this.checkPermission(permissions, required),
@@ -30,7 +39,10 @@ export class PermissionService {
     return this.userContextService.loadPermissions(userId);
   }
 
-  private checkPermission(userPermissions: string[], requiredPermission: string): boolean {
+  private checkPermission(
+    userPermissions: string[],
+    requiredPermission: string,
+  ): boolean {
     if (userPermissions.includes(requiredPermission)) {
       return true;
     }
@@ -45,7 +57,10 @@ export class PermissionService {
     return userPermissions.includes(resourceWildcard);
   }
 
-  async getPermissionsByResource(userId: number, resource: string): Promise<string[]> {
+  async getPermissionsByResource(
+    userId: number,
+    resource: string,
+  ): Promise<string[]> {
     const permissions = await this.userContextService.loadPermissions(userId);
 
     return permissions.filter((perm) => {
@@ -54,12 +69,19 @@ export class PermissionService {
     });
   }
 
-  async canPerformAction(userId: number, resource: string, action: string): Promise<boolean> {
+  async canPerformAction(
+    userId: number,
+    resource: string,
+    action: string,
+  ): Promise<boolean> {
     const permissionCode = `${resource}.${action}`;
     return this.hasPermission(userId, permissionCode);
   }
 
-  async getActionsForResource(userId: number, resource: string): Promise<string[]> {
+  async getActionsForResource(
+    userId: number,
+    resource: string,
+  ): Promise<string[]> {
     const permissions = await this.getPermissionsByResource(userId, resource);
     const actions = permissions.map((perm) => {
       const [, action] = perm.split('.');
@@ -69,4 +91,3 @@ export class PermissionService {
     return [...new Set(actions)];
   }
 }
-

@@ -172,7 +172,7 @@ async createProduct() { }
 ### Scope Component (What DATA can user access?)
 
 ```typescript
-// Initialized per request by ScopeInterceptor
+// Initialized per request by DataScopeInterceptor
 const ctx = await dataScopeContext.applyFilter();
 
 // Example repository usage
