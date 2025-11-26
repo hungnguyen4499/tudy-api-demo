@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 
 // Configuration
 import { ConfigModule } from '@/config';
@@ -11,12 +11,20 @@ import { CacheModule } from '@/infrastructure';
 import { FileModule } from '@/infrastructure';
 
 // Business Modules
+import { SystemModule } from '@/modules/system/system.module';
 import { AuthModule } from '@/modules/auth/auth.module';
 import { UsersModule } from '@/modules/users/users.module';
 import { FilesModule } from '@/modules/files/files.module';
 
 // Guards
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+
+// Interceptors
+import { ScopeInterceptor } from './common/interceptors/scope.interceptor';
+
+// Services
+import { DataScopeContext } from './common/services/data-scope-context.service';
+// Note: UserContextService is provided by SystemModule (@Global)
 
 @Module({
   imports: [
@@ -29,6 +37,9 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
     CacheModule,
     FileModule,
 
+    // System (@Global - RBAC, Menu, Settings)
+    SystemModule,
+
     // Business Modules
     AuthModule,
     UsersModule,
@@ -36,10 +47,20 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
   ],
   controllers: [],
   providers: [
+    // Common services (request-scoped)
+    DataScopeContext,
+    // Note: UserContextService is provided by SystemModule (@Global)
+
     // Global JWT Guard - applies to all routes except @Public()
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
+    },
+
+    // Global Scope Interceptor - initializes scope for authenticated requests
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: ScopeInterceptor,
     },
   ],
 })

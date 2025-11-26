@@ -15,11 +15,10 @@ datasource db {
 // ============================================
 
 model User {
-  id           Int      @id @default(autoincrement())
-  email        String   @unique
-  phone        String?  @unique
-  passwordHash String   @map("password_hash")
-  role         UserRole
+  id           Int     @id @default(autoincrement())
+  email        String  @unique
+  phone        String? @unique
+  passwordHash String  @map("password_hash")
 
   firstName   String    @map("first_name")
   lastName    String    @map("last_name")
@@ -53,10 +52,10 @@ model User {
   reviews            Review[]
   notifications      Notification[]
   payments           Payment[]
+  userRoles          UserRole[] // ⭐ RBAC: User roles (single source of truth)
 
   @@index([email])
   @@index([phone])
-  @@index([role])
   @@index([status])
   @@map("users")
 }
@@ -221,14 +220,14 @@ model Organization {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  members         OrganizationMember[]
-  tutors          Tutor[] // ⭐ All tutors (including freelancers) belong to an organization
-  products        Product[]
-  bookings        Booking[]
-  reviews         Review[]
-  subscriptions   Subscription[]
-  conversations   Conversation[]
-  scheduleSlots   ScheduleSlot[]
+  members       OrganizationMember[]
+  tutors        Tutor[] // ⭐ All tutors (including freelancers) belong to an organization
+  products      Product[]
+  bookings      Booking[]
+  reviews       Review[]
+  subscriptions Subscription[]
+  conversations Conversation[]
+  scheduleSlots ScheduleSlot[]
 
   @@index([slug])
   @@index([type]) // ⭐ For filtering by org type
@@ -241,13 +240,8 @@ model OrganizationMember {
   userId         Int @unique @map("user_id")
   organizationId Int @map("organization_id")
 
-  role OrganizationMemberRole @default(STAFF)
-
-  // ⭐ Fine-grained permissions (optional, can be expanded)
-  canManageProducts  Boolean @default(false) @map("can_manage_products")
-  canManageBookings  Boolean @default(false) @map("can_manage_bookings")
-  canManageMembers   Boolean @default(false) @map("can_manage_members")
-  canViewReports     Boolean @default(false) @map("can_view_reports")
+  // ⭐ Authorization is handled via RoleAssignment (RBAC)
+  // This table only tracks organization membership
 
   joinedAt  DateTime @default(now()) @map("joined_at")
   createdAt DateTime @default(now()) @map("created_at")
@@ -261,6 +255,159 @@ model OrganizationMember {
   @@index([userId])
   @@index([organizationId])
   @@map("organization_members")
+}
+
+// ============================================
+// RBAC (Role-Based Access Control) MODELS
+// ============================================
+
+model Role {
+  id          Int     @id @default(autoincrement())
+  name        String  @unique // e.g., "admin", "partner_owner", "partner_staff", "tutor_freelance"
+  displayName String  @map("display_name") // e.g., "Administrator", "Partner Owner"
+  description String? @db.Text
+
+  dataScope ScopeType @default(USER) @map("data_scope") // GLOBAL, ORGANIZATION, or USER - what data can users with this role access?
+  isSystem  Boolean   @default(false) @map("is_system") // System roles cannot be modified/deleted
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  permissions RolePermission[]
+  userRoles   UserRole[]
+  menus       RoleMenu[] // ⭐ Roles can have menu access
+
+  @@index([name])
+  @@map("roles")
+}
+
+model Permission {
+  id          Int     @id @default(autoincrement())
+  code        String  @unique // e.g., "product.create", "booking.update", "report.export"
+  resource    String // e.g., "product", "booking", "user", "report"
+  action      String // e.g., "create", "read", "update", "delete", "export"
+  displayName String  @map("display_name")
+  description String? @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  roles RolePermission[]
+  menus Menu[] // ⭐ Menu items can reference permissions
+
+  @@unique([resource, action])
+  @@index([code])
+  @@index([resource])
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           Int @id @default(autoincrement())
+  roleId       Int @map("role_id")
+  permissionId Int @map("permission_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  id     Int @id @default(autoincrement())
+  userId Int @map("user_id")
+  roleId Int @map("role_id")
+
+  // Optional: Temporary role assignments
+  expiresAt DateTime? @map("expires_at")
+
+  assignedBy Int?     @map("assigned_by") // Who assigned this role
+  assignedAt DateTime @default(now()) @map("assigned_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId]) // A user can have same role only once
+  @@index([userId])
+  @@index([roleId])
+  @@index([expiresAt])
+  @@map("user_roles")
+}
+
+// ============================================
+// MENU SYSTEM (UI-Driven Permissions)
+// ============================================
+
+model Menu {
+  id   Int    @id @default(autoincrement())
+  code String @unique // e.g., "menu.products", "btn.product.create"
+
+  // UI Properties
+  type      MenuType // MENU, BUTTON, TAB
+  name      String // Display name
+  nameEn    String?  @map("name_en")
+  icon      String? // Icon name (e.g., "ProductIcon", "fa-plus")
+  path      String? // Route path for MENU type (e.g., "/products")
+  component String? // Component name (e.g., "ProductList", "ProductForm")
+
+  // Hierarchy
+  parentId  Int? @map("parent_id")
+  sortOrder Int  @default(0) @map("sort_order")
+
+  // Visibility
+  isVisible Boolean @default(true) @map("is_visible")
+  isEnabled Boolean @default(true) @map("is_enabled")
+
+  // ⭐ HYBRID: Menu can reference a Permission for backend logic
+  permissionId Int? @map("permission_id")
+
+  // Metadata
+  description String? @db.Text
+  metadata    Json? // Extra config (color, badge, shortcuts, etc.)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  parent     Menu?       @relation("MenuHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children   Menu[]      @relation("MenuHierarchy")
+  permission Permission? @relation(fields: [permissionId], references: [id], onDelete: SetNull)
+  roles      RoleMenu[]
+
+  @@index([type])
+  @@index([parentId])
+  @@index([permissionId])
+  @@index([sortOrder])
+  @@index([code])
+  @@map("menus")
+}
+
+model RoleMenu {
+  id     Int @id @default(autoincrement())
+  roleId Int @map("role_id")
+  menuId Int @map("menu_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  menu Menu @relation(fields: [menuId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, menuId])
+  @@index([roleId])
+  @@index([menuId])
+  @@map("role_menus")
 }
 
 // ============================================
@@ -314,13 +461,13 @@ model Product {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdByTutor   Tutor?            @relation("ProductCreatedByTutor", fields: [createdByTutorId], references: [id], onDelete: SetNull)
-  categories       ProductCategory[]
-  images           ProductImage[]
-  bookings         Booking[]
-  reviews          Review[]
-  consultations    Consultation[]
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdByTutor Tutor?            @relation("ProductCreatedByTutor", fields: [createdByTutorId], references: [id], onDelete: SetNull)
+  categories     ProductCategory[]
+  images         ProductImage[]
+  bookings       Booking[]
+  reviews        Review[]
+  consultations  Consultation[]
 
   @@index([slug])
   @@index([type])
@@ -501,7 +648,7 @@ model Booking {
 
   // ⭐ Provider side: Organization provides service, Tutor executes
   organizationId Int  @map("organization_id") // REQUIRED - which org provides service
-  tutorId        Int? @map("tutor_id")        // Optional - assigned tutor (can be null initially)
+  tutorId        Int? @map("tutor_id") // Optional - assigned tutor (can be null initially)
 
   consultationId Int? @unique @map("consultation_id")
 
@@ -545,14 +692,14 @@ model Booking {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  parent       User         @relation(fields: [parentId], references: [id])
-  child        Child        @relation(fields: [childId], references: [id])
-  product      Product      @relation(fields: [productId], references: [id])
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  tutor        Tutor?       @relation(fields: [tutorId], references: [id], onDelete: SetNull)
+  parent       User          @relation(fields: [parentId], references: [id])
+  child        Child         @relation(fields: [childId], references: [id])
+  product      Product       @relation(fields: [productId], references: [id])
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  tutor        Tutor?        @relation(fields: [tutorId], references: [id], onDelete: SetNull)
   consultation Consultation? @relation("ConsultationBooking", fields: [consultationId], references: [id])
-  payment      Payment?     @relation("BookingPayment")
-  review       Review?      @relation("BookingReview")
+  payment      Payment?      @relation("BookingPayment")
+  review       Review?       @relation("BookingReview")
   schedules    Schedule[]
 
   @@index([bookingCode])
@@ -843,15 +990,6 @@ model Payment {
 // ENUMS
 // ============================================
 
-enum UserRole {
-  PARENT
-  TUTOR
-  PARTNER_STAFF
-  PARTNER_ADMIN
-  KIGGLE_STAFF
-  KIGGLE_ADMIN
-}
-
 enum UserStatus {
   ACTIVE
   INACTIVE
@@ -876,7 +1014,7 @@ enum TutorStatus {
 
 enum OrganizationType {
   INDIVIDUAL // Freelance tutor (virtual organization for single person)
-  COMPANY    // Actual organization (partner/education center with multiple staff)
+  COMPANY // Actual organization (partner/education center with multiple staff)
 }
 
 enum OrganizationStatus {
@@ -887,9 +1025,16 @@ enum OrganizationStatus {
   INACTIVE
 }
 
-enum OrganizationMemberRole {
-  STAFF
-  ADMIN
+enum ScopeType {
+  GLOBAL // Platform admins - see all data
+  ORGANIZATION // Partners/tutors - see only their org
+  USER // Parents - see only their own data
+}
+
+enum MenuType {
+  MENU // Sidebar menu item (navigation)
+  BUTTON // Action button (create, edit, delete, export, etc.)
+  TAB // Tab item (sub-navigation)
 }
 
 enum ProductType {

@@ -4,9 +4,11 @@ A comprehensive tutoring marketplace platform connecting parents with tutors and
 
 ## 📚 Documentation
 
-> 📖 **[Scope-Based Access Control](./docs/SCOPE_BASED_ACCESS_CONTROL.md)** - Complete technical architecture  
-> 🎨 **[Architecture Diagrams](./docs/SCOPE_BASED_ARCHITECTURE_DIAGRAMS.md)** - Visual representation with Mermaid diagrams  
-> 📘 **[Database Design](./docs/DATABASE_DESIGN.md)** - Complete database schema with scope-based access control  
+> 🔐 **[Hybrid Access Control](./docs/HYBRID_ACCESS_CONTROL.md)** - Complete RBAC + Scope implementation guide  
+> 🎨 **[Menu-Based Permissions](./docs/MENU_BASED_PERMISSIONS.md)** - Dynamic UI with menu system (NEW!)  
+> 📖 **[Scope-Based Access Control](./docs/SCOPE_BASED_ACCESS_CONTROL.md)** - Detailed scope architecture  
+> 🖼️ **[Architecture Diagrams](./docs/SCOPE_BASED_ARCHITECTURE_DIAGRAMS.md)** - Visual representation with Mermaid diagrams  
+> 📘 **[Database Design](./docs/DATABASE_DESIGN.md)** - Complete database schema (28 tables)  
 > 📊 **[Database ERD](./docs/DATABASE_ERD.md)** - Entity relationship diagrams  
 
 ## 🚀 Tech Stack
@@ -18,7 +20,7 @@ A comprehensive tutoring marketplace platform connecting parents with tutors and
 - **Cache**: Redis
 - **Logs**: MongoDB
 - **Authentication**: JWT (Access Token + Refresh Token)
-- **Authorization**: Scope-Based Access Control
+- **Authorization**: Hybrid (RBAC + Menu System + Scope-Based Access Control)
 - **Validation**: class-validator, class-transformer
 - **API Documentation**: Swagger/OpenAPI
 - **File Storage**: MinIO / AWS S3
@@ -28,20 +30,37 @@ A comprehensive tutoring marketplace platform connecting parents with tutors and
 ```
 src/
 ├── common/           # Shared utilities, DTOs, filters, guards, decorators
+│   ├── services/     # Global services (UserContext, Permission, Menu, Scope)
+│   ├── decorators/   # Custom decorators (@RequirePermission, @Public, etc.)
+│   └── guards/       # Authorization guards (JWT, Permissions)
+│
 ├── infrastructure/   # Database, cache, file storage modules
+│
 └── modules/          # Business modules
+    ├── system/       # @Global System module (RBAC, Menu, Settings)
+    │   ├── controllers/ # Roles, Permissions, Menus management
+    │   ├── services/    # System services
+    │   └── dto/         # System DTOs
+    │
     ├── auth/         # Authentication module
+    │   ├── strategies/  # JWT, OAuth strategies
+    │   └── dto/         # Auth DTOs (login, register)
+    │
     ├── users/        # User management module
+    ├── products/     # Products module (example with permissions)
     └── files/        # File upload module
 
 docs/
-├── DATABASE_DESIGN.md  # Complete database design with RBAC
-├── DATABASE_ERD.md     # Entity relationship diagrams
-└── API_FLOW.md         # API flow documentation
+├── DATABASE_DESIGN.md           # Complete database schema (28 tables)
+├── DATABASE_ERD.md              # Entity relationship diagrams
+├── HYBRID_ACCESS_CONTROL.md     # RBAC + Scope implementation
+├── MENU_BASED_PERMISSIONS.md    # Menu system documentation
+├── MODULE_SEPARATION.md         # Auth vs Access Control separation
+└── IMPLEMENTATION_GUIDE.md      # How to use the system
 
 prisma/
-├── schema.prisma        # Current active schema
-└── schema-kiggle.prisma # Complete KIGGLE platform schema
+├── schema.prisma     # Database schema with RBAC + Menu system
+└── seeds/            # Seed data for permissions, roles, menus
 ```
 
 ## 🏗️ Architecture
@@ -57,12 +76,30 @@ prisma/
 
 ### Core Platform Features
 
-#### 1. Scope-Based Access Control
-- **Automatic Data Filtering**: Repository layer automatically filters data by scope
-- **Three Scope Types**: GLOBAL (admins), ORGANIZATION (partners/tutors), USER (parents)
-- **Simple Permissions**: Boolean flags on OrganizationMember (canManageProducts, canManageBookings, etc.)
-- **Multi-Tenant Architecture**: Every resource belongs to an organization (INDIVIDUAL or COMPANY)
-- **Performance Optimized**: Single query instead of multiple permission checks
+#### 1. Separated Auth & System Modules
+
+**AuthModule** (Authentication):
+- User login/register
+- JWT token generation & validation
+- OAuth providers support (Google, Facebook - ready to add)
+- Password reset & email verification (TODO)
+
+**SystemModule** (@Global - Authorization & System Management):
+- **RBAC**: Fine-grained permissions with CRUD APIs
+  - Roles management
+  - Permissions management
+  - Assign permissions/menus to roles
+- **Menu System**: Dynamic UI with full management API
+  - Create/update/delete menus via API
+  - Hierarchical structure (parent-child)
+  - Types: MENU (sidebar), BUTTON (actions), TAB (navigation)
+- **Scope-Based**: Automatic multi-tenant data filtering
+  - GLOBAL scope (platform admins)
+  - ORGANIZATION scope (partners/tutors)
+  - USER scope (parents)
+- **System Settings**: (TODO) Platform configuration
+- **Audit Logs**: (TODO) Track system changes
+- **Performance**: Redis caching (5min TTL), automatic cache invalidation
 - **Zero Boilerplate**: No manual authorization code in services
 
 #### 2. Multi-Role User System
@@ -258,6 +295,61 @@ The API will be available at `http://localhost:3000/api/v1`
 Swagger documentation is available at:
 - Development: `http://localhost:3000/api/docs`
 
+### Key API Endpoints
+
+#### Authentication
+```
+POST   /api/auth/register             - Register new user
+POST   /api/auth/login                - Login
+POST   /api/auth/refresh              - Refresh token
+POST   /api/auth/logout               - Logout
+GET    /api/auth/me                   - Get current user
+```
+
+#### User's Menus & Permissions (Loaded on login)
+```
+GET    /api/system/menus                - Get user's menus for UI rendering
+GET    /api/system/permissions          - Get user's permissions
+```
+
+#### Admin: Roles Management
+```
+GET    /api/system/roles                - List all roles
+POST   /api/system/roles                - Create role
+PATCH  /api/system/roles/:id            - Update role
+DELETE /api/system/roles/:id            - Delete role
+POST   /api/system/roles/:id/permissions - Assign permissions to role
+POST   /api/system/roles/:id/menus      - Assign menus to role
+```
+
+#### Admin: Permissions Management
+```
+GET    /api/system/permissions          - List all permissions
+GET    /api/system/permissions/grouped  - Grouped by resource
+POST   /api/system/permissions          - Create permission
+PATCH  /api/system/permissions/:id      - Update permission
+DELETE /api/system/permissions/:id      - Delete permission
+```
+
+#### Admin: Menus Management
+```
+GET    /api/system/menus          - List all menus
+GET    /api/system/menus/tree     - Get menu tree
+POST   /api/system/menus          - Create menu
+PATCH  /api/system/menus/:id      - Update menu
+DELETE /api/system/menus/:id      - Delete menu
+```
+
+#### Products (Example with Permissions)
+```
+GET    /api/products/marketplace      - Public: View all active products
+GET    /api/products                  - Protected: Scope-filtered products
+POST   /api/products                  - Protected: Requires product.create
+PATCH  /api/products/:id              - Protected: Requires product.update
+DELETE /api/products/:id              - Protected: Requires product.delete
+POST   /api/products/export           - Protected: Requires product.export
+```
+
 ## 📝 Available Scripts
 
 ```bash
@@ -372,80 +464,101 @@ yarn test:e2e           # Run e2e tests
 - Date-range scheduling
 - Link management
 
-## 🔐 Scope-Based Access Control
+## 🔐 Hybrid Access Control
 
-### How It Works
+The platform uses a **Hybrid Access Control** model combining:
 
-Access control is automatically handled at the **repository layer** based on the user's **scope**:
+### 1. RBAC (Role-Based Access Control)
+**Controls WHAT actions users can perform** - Fine-grained permissions for UI elements and actions.
 
 ```typescript
-// User logs in → System determines scope
+// Check if user can export reports
+@RequirePermission('report.export')
+async exportReport() { ... }
+
+// Show/hide UI elements based on permissions
+<Button show={hasPermission('product.create')}>Create Product</Button>
+```
+
+**Permission Format**: `{resource}.{action}` (e.g., `product.create`, `booking.approve`, `report.export`)
+
+### 2. Scope-Based Access Control
+**Controls WHAT data users can access** - Automatic data filtering by organization/user context.
+
+```typescript
+// Automatically applies scope filter
 enum ScopeType {
   GLOBAL       // Platform admins - see all data
   ORGANIZATION // Partners/tutors - see only their org's data
-  USER         // Parents - see public data + own data
+  USER         // Parents - see public + own data
 }
 
-// Repository automatically filters queries
-if (scope.type === ScopeType.ORGANIZATION) {
-  // Auto-inject: WHERE organizationId = user.organizationId
+// Repository auto-filters queries
+if (scope === ORGANIZATION) {
+  WHERE organizationId = user.organizationId
 }
 ```
 
-### System-Level Roles (User.role)
+### Complete Access Flow
 
-| Role | Scope | Access Level |
-|------|-------|-------------|
-| `KIGGLE_ADMIN` | GLOBAL | Full platform access |
-| `KIGGLE_STAFF` | GLOBAL | Platform data (read-only) |
-| `PARTNER_ADMIN` | ORGANIZATION | Own organization's data (full access) |
-| `PARTNER_STAFF` | ORGANIZATION | Own organization's data (limited by flags) |
-| `TUTOR` | ORGANIZATION | Own organization's products/bookings |
-| `PARENT` | USER | Public products + own bookings |
+```
+Request → JWT Auth → Load User Context → RBAC Check → Scope Filter → Result
 
-### Organization-Level Permissions
-
-For `PARTNER_STAFF`, permissions are controlled by boolean flags on `OrganizationMember`:
-
-```typescript
-// OrganizationMember model
-{
-  role: 'STAFF' | 'ADMIN',
-  
-  // Permission flags (checked for STAFF only)
-  canManageProducts: boolean,  // Create/edit/delete products
-  canManageBookings: boolean,  // Manage bookings
-  canManageMembers: boolean,   // Invite/remove members
-  canViewReports: boolean,     // View analytics
-}
-
-// ADMIN role → All permissions automatically granted
+1. "Can user DO this action?"     → RBAC checks permissions
+2. "What DATA can user access?"   → Scope filters by organization
 ```
 
-### Permission Check Example
+### System Roles
 
+| Role | Scope | RBAC Permissions | Data Access |
+|------|-------|-----------------|-------------|
+| `KIGGLE_ADMIN` | GLOBAL | `*.*` (all) | All organizations |
+| `KIGGLE_STAFF` | GLOBAL | Read-only | All organizations |
+| `PARTNER_ADMIN` | ORGANIZATION | Full org permissions | Own org only |
+| `PARTNER_STAFF` | ORGANIZATION | Limited permissions | Own org only |
+| `TUTOR` | USER | Own resources | Own products/bookings |
+| `PARENT` | USER | View + manage own | Public + own bookings |
+
+### Permission Examples
+
+**RBAC Tables** (4 tables):
+- `roles` - Role definitions (partner_admin, partner_staff, etc.)
+- `permissions` - Permission definitions (product.create, booking.approve, etc.)
+- `role_permissions` - Role-permission mapping
+- `role_assignments` - User role assignments (can be org-scoped)
+
+**Usage in Controller:**
 ```typescript
-// In your service - NO manual authorization needed!
-async findProducts() {
-  // Repository automatically filters by scope
-  return this.productsRepository.findAll();
-  // If ORGANIZATION scope: WHERE organizationId = X
-  // If USER scope: WHERE status = 'ACTIVE'
-  // If GLOBAL scope: No filter
-}
-
-// Check organization-level permission (when needed)
-async createProduct(data: CreateProductDto, userId: number, orgId: number) {
-  const member = await this.getMember(userId, orgId);
-  
-  if (member.role === 'ADMIN' || member.canManageProducts) {
-    // Repository auto-injects organizationId
-    return this.productsRepository.create(data);
+@Controller('products')
+export class ProductsController {
+  // RBAC: Check permission
+  // SCOPE: Auto-filter by organization
+  @RequirePermission('product.create')
+  @Post()
+  async create(@Body() dto: CreateProductDto) {
+    // Permission check passes
+    // Repository auto-injects organizationId from scope
+    return this.service.create(dto);
   }
-  
-  throw new ForbiddenException();
+
+  // RBAC: Check permission
+  // SCOPE: Filter results by organization
+  @RequirePermission('product.read')
+  @Get()
+  async findAll() {
+    // Returns only products from user's organization
+    return this.service.findAll();
+  }
 }
 ```
+
+### Benefits
+
+✅ **RBAC**: Fine-grained UI permissions (buttons, menus, exports)  
+✅ **Scope**: Multi-tenant data isolation (Organization A ≠ Organization B)  
+✅ **Performance**: Permissions cached in Redis  
+✅ **Security**: Automatic scope filtering at repository layer  
+✅ **Maintainable**: Add permissions without code changes
 
 ### Multi-Tenant Architecture
 

@@ -48,7 +48,7 @@ export class AuthService {
     // Hash password
     const passwordHash = await bcrypt.hash(request.password, 10);
 
-    // Create user
+    // Create user (no role field - roles are assigned via UserRole)
     const user = await this.prisma.user.create({
       data: {
         email: request.email,
@@ -56,10 +56,36 @@ export class AuthService {
         passwordHash,
         firstName: request.firstName,
         lastName: request.lastName,
-        role: request.role,
         status: UserStatus.ACTIVE,
         emailVerified: true, // Auto-verify on registration
         phoneVerified: request.phone ? false : true,
+      },
+    });
+
+    // Assign role via UserRole (RBAC)
+    // Map UserRole enum to role name in database (lowercase with underscore)
+    const roleNameMap: Record<UserRole, string> = {
+      [UserRole.PARENT]: 'parent',
+      [UserRole.TUTOR]: 'tutor',
+      [UserRole.PARTNER_STAFF]: 'partner_staff',
+      [UserRole.PARTNER_ADMIN]: 'partner_admin',
+      [UserRole.KIGGLE_STAFF]: 'kiggle_staff',
+      [UserRole.KIGGLE_ADMIN]: 'kiggle_admin',
+    };
+
+    const dbRoleName = roleNameMap[request.role];
+    const role = await this.prisma.role.findUnique({
+      where: { name: dbRoleName },
+    });
+
+    if (!role) {
+      throw new BusinessException(ErrorCodes.ROLE_NOT_FOUND);
+    }
+
+    await this.prisma.userRole.create({
+      data: {
+        userId: user.id,
+        roleId: role.id,
       },
     });
 
@@ -72,8 +98,11 @@ export class AuthService {
       });
     }
 
+    // Get role name for JWT (use role name from database)
+    const jwtRoleName = role.name;
+
     // Generate and return tokens
-    return this.generateTokens(user.id, user.email, user.role);
+    return this.generateTokens(user.id, user.email, jwtRoleName);
   }
 
   /**
@@ -108,8 +137,28 @@ export class AuthService {
       throw new BusinessException(ErrorCodes.USER_INACTIVE);
     }
 
+    // Get primary role from UserRole
+    const userRole = await this.prisma.userRole.findFirst({
+      where: {
+        userId: user.id,
+        expiresAt: null, // Not expired
+      },
+      include: {
+        role: true,
+      },
+      orderBy: {
+        assignedAt: 'desc', // Get most recent
+      },
+    });
+
+    if (!userRole) {
+      throw new BusinessException(ErrorCodes.USER_HAS_NO_ROLE);
+    }
+
+    const jwtRoleName = userRole.role.name;
+
     // Generate tokens
-    return this.generateTokens(user.id, user.email, user.role);
+    return this.generateTokens(user.id, user.email, jwtRoleName);
   }
 
   /**

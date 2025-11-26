@@ -246,12 +246,89 @@ export const UserErrors = {
 } as const;
 
 // ============================================
+// SYSTEM MODULE (Role, Permission, Menu)
+// ============================================
+export const SystemErrors = {
+  // Role errors
+  ROLE_NOT_FOUND: {
+    code: 'ROLE_NOT_FOUND',
+    message: 'Role not found',
+    httpStatus: 404,
+  },
+  ROLE_NAME_EXISTS: {
+    code: 'ROLE_NAME_EXISTS',
+    message: 'Role name already exists',
+    httpStatus: 409,
+  },
+  ROLE_NOT_MODIFIABLE: {
+    code: 'ROLE_NOT_MODIFIABLE',
+    message: 'Cannot modify system role',
+    httpStatus: 400,
+  },
+  ROLE_HAS_USERS: {
+    code: 'ROLE_HAS_USERS',
+    message: 'Cannot delete role with assigned users',
+    httpStatus: 400,
+  },
+  USER_HAS_NO_ROLE: {
+    code: 'USER_HAS_NO_ROLE',
+    message: 'User has no role assignment',
+    httpStatus: 400,
+  },
+
+  // Permission errors
+  PERMISSION_NOT_FOUND: {
+    code: 'PERMISSION_NOT_FOUND',
+    message: 'Permission not found',
+    httpStatus: 404,
+  },
+  PERMISSION_CODE_EXISTS: {
+    code: 'PERMISSION_CODE_EXISTS',
+    message: 'Permission code already exists',
+    httpStatus: 409,
+  },
+  PERMISSION_IN_USE: {
+    code: 'PERMISSION_IN_USE',
+    message: 'Cannot delete permission that is in use',
+    httpStatus: 400,
+  },
+
+  // Menu errors
+  MENU_NOT_FOUND: {
+    code: 'MENU_NOT_FOUND',
+    message: 'Menu not found',
+    httpStatus: 404,
+  },
+  MENU_CODE_EXISTS: {
+    code: 'MENU_CODE_EXISTS',
+    message: 'Menu code already exists',
+    httpStatus: 409,
+  },
+  MENU_PARENT_NOT_FOUND: {
+    code: 'MENU_PARENT_NOT_FOUND',
+    message: 'Parent menu not found',
+    httpStatus: 400,
+  },
+  MENU_SELF_PARENT: {
+    code: 'MENU_SELF_PARENT',
+    message: 'Menu cannot be its own parent',
+    httpStatus: 400,
+  },
+  MENU_HAS_CHILDREN: {
+    code: 'MENU_HAS_CHILDREN',
+    message: 'Cannot delete menu with child menus',
+    httpStatus: 400,
+  },
+} as const;
+
+// ============================================
 // AGGREGATE ALL ERRORS
 // ============================================
 export const ErrorCodes = {
   ...CommonErrors,
   ...AuthErrors,
   ...UserErrors,
+  ...SystemErrors,
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

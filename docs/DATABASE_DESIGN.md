@@ -38,19 +38,14 @@ model User {
   email        String   @unique
   phone        String?  @unique
   passwordHash String
-  role         UserRole
   status       UserStatus
   ...
 }
 ```
 
-**User Roles (UserRole enum):**
-- `PARENT`: Parents looking for tutors/courses
-- `TUTOR`: Individual tutors
-- `PARTNER_STAFF`: Organization staff members
-- `PARTNER_ADMIN`: Organization administrators
-- `KIGGLE_STAFF`: Platform staff
-- `KIGGLE_ADMIN`: Platform administrators
+**RBAC Relationship:**
+- Roles are stored in the `Role` table and assigned via `UserRole` (many-to-many bridge)
+- `UserRole` (TypeScript enum) is only used for request validation/mapping during registration
 
 **User Status (UserStatus enum):**
 - `ACTIVE`: Active user
@@ -64,6 +59,7 @@ model User {
 - ✅ Soft delete (deletedAt)
 - ✅ Profile information (name, avatar, gender, date of birth)
 - ✅ Address details with geo-coordinates
+- ✅ `userRoles` relation used by RBAC for permissions & data scopes
 
 ### 1.2 Parent Profile
 
@@ -173,49 +169,295 @@ model OrganizationMember {
   id             Int @id
   userId         Int @unique
   organizationId Int
-  role           OrganizationMemberRole
-  
-  // Fine-grained permissions
-  canManageProducts  Boolean
-  canManageBookings  Boolean
-  canManageMembers   Boolean
-  canViewReports     Boolean
+  joinedAt       DateTime @default(now())
   ...
 }
 ```
 
-**Member Roles:**
-- `STAFF`: Regular staff member
-- `ADMIN`: Organization administrator
-
-**Permission Flags:**
-- `canManageProducts`: Create, edit, delete products
-- `canManageBookings`: Manage bookings and assignments
-- `canManageMembers`: Invite, remove, update member permissions
-- `canViewReports`: Access analytics and reports
-
 **Features:**
-- ✅ Simple role + permission flags
-- ✅ No complex RBAC tables needed
-- ✅ Easy to extend with more flags
-- ✅ Join date tracking
-
-**Permission Management:**
-```typescript
-// ADMIN role has all permissions by default
-if (member.role === 'ADMIN') {
-  // Auto-grant all permissions
-} else {
-  // Check specific flags
-  if (member.canManageProducts) { /* allow */ }
-}
+- ✅ Tracks which organization a user belongs to
+- ✅ One-to-one relationship (a user belongs to at most one organization)
+- ✅ All authorization logic comes from RBAC (`UserRole` + `Role.dataScope`)
+- ✅ Keeps membership concerns separate from permissions
 ```
 
 ---
 
-## 2. ACCESS CONTROL ARCHITECTURE
+## 2. RBAC (Role-Based Access Control) MODULE
 
-### 2.1 Scope-Based Access Control
+### 2.1 Role
+
+```prisma
+model Role {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique // e.g., "partner_admin", "partner_staff"
+  displayName String    // e.g., "Partner Administrator"
+  description String?
+  dataScope   ScopeType @default(USER) // GLOBAL | ORGANIZATION | USER - what data can users access?
+  isSystem    Boolean   @default(false)  // Prevents modification
+  
+  permissions RolePermission[]
+  userRoles   UserRole[]
+}
+
+enum ScopeType {
+  GLOBAL       // Platform admins - see all data
+  ORGANIZATION // Partners/tutors - see only their org
+  USER         // Parents - see only own data
+}
+```
+
+**Features:**
+- ✅ Flexible role definition stored in database
+- ✅ `dataScope` determines what data users can access (GLOBAL/ORGANIZATION/USER)
+- ✅ System roles protected from modification
+- ✅ Extensible for custom organization roles
+- ✅ Works together with `UserRole` to assign roles to users
+
+**Predefined System Roles:**
+- `kiggle_admin` - Full platform access
+- `kiggle_staff` - Read-only platform access
+- `partner_admin` - Full access within organization
+- `partner_staff` - Limited access within organization
+- `tutor` - Own resources only
+- `parent` - View all + manage own
+
+### 2.2 Permission
+
+```prisma
+model Permission {
+  id          Int    @id @default(autoincrement())
+  code        String @unique // e.g., "product.create"
+  resource    String         // e.g., "product"
+  action      String         // e.g., "create"
+  displayName String
+  description String?
+  
+  roles RolePermission[]
+}
+```
+
+**Features:**
+- ✅ Granular action-level permissions
+- ✅ Consistent naming convention (`{resource}.{action}`)
+- ✅ Easy to query by resource or action
+- ✅ Supports wildcard permissions (`product.*`, `*.*`)
+
+**Permission Categories:**
+
+| Category | Examples |
+|----------|----------|
+| **Product** | `product.create`, `product.read`, `product.update`, `product.delete` |
+| **Booking** | `booking.read`, `booking.update`, `booking.approve`, `booking.cancel` |
+| **Report** | `report.view`, `report.export` |
+| **Member** | `member.manage`, `member.invite`, `member.remove` |
+| **Organization** | `organization.manage`, `organization.view` |
+| **Admin** | `*.*` (all permissions) |
+
+### 2.3 RolePermission (Join Table)
+
+```prisma
+model RolePermission {
+  id           Int @id @default(autoincrement())
+  roleId       Int
+  permissionId Int
+  
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  
+  @@unique([roleId, permissionId])
+}
+```
+
+**Features:**
+- ✅ Many-to-many relationship between roles and permissions
+- ✅ Cascade delete when role or permission is removed
+- ✅ Unique constraint prevents duplicate assignments
+
+### 2.4 UserRole
+
+```prisma
+model UserRole {
+  id     Int @id @default(autoincrement())
+  userId Int
+  roleId Int
+  
+  // Optional: Temporary assignments (future extension)
+  expiresAt DateTime?
+  assignedBy Int?
+  assignedAt DateTime @default(now())
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, roleId])
+}
+```
+
+**Features:**
+- ✅ Single source of truth for user-role assignments
+- ✅ Works with `Role.dataScope` + `OrganizationMember` to determine access
+- ✅ Supports audit fields for future temporary assignments
+- ✅ Cascade delete keeps assignments in sync
+
+**Example:**
+```typescript
+await prisma.userRole.create({
+  data: {
+    userId: user.id,
+    roleId: partnerAdminRole.id,
+  },
+});
+```
+
+---
+
+## 3. MENU SYSTEM (UI-Driven Permissions)
+
+### 3.1 Menu
+
+```prisma
+model Menu {
+  id   Int    @id @default(autoincrement())
+  code String @unique // e.g., "menu.products", "btn.product.create"
+  
+  type      MenuType // MENU | BUTTON | TAB
+  name      String   // Display name
+  icon      String?  // Icon name
+  path      String?  // Route path (for MENU type)
+  component String?  // Component name
+  
+  parentId  Int?     // Hierarchy support
+  sortOrder Int      // Display order
+  
+  isVisible Boolean  // Show/hide
+  isEnabled Boolean  // Enable/disable
+  
+  permissionId Int?  // ⭐ Optional reference to Permission
+  
+  metadata Json?    // Extra config
+}
+
+enum MenuType {
+  MENU   // Sidebar navigation item
+  BUTTON // Action button (add, edit, delete, export)
+  TAB    // Tab item
+}
+```
+
+**Features:**
+- ✅ Dynamic UI structure managed in database
+- ✅ Hierarchy support (parent-child menus)
+- ✅ Multiple types: MENU (navigation), BUTTON (actions), TAB (sub-nav)
+- ✅ Optional link to Permission (hybrid approach)
+- ✅ Sorting and visibility control
+- ✅ Metadata for extra configuration
+
+**Why each column stays:**
+- `nameEn`, `icon`, `path`, `component` keep the admin UI multilingual and decoupled from hardcoded routes/components.
+- `parentId` + `sortOrder` allow the backend to assemble trees in a predictable order for any client (web/mobile).
+- `isVisible` vs `isEnabled` separates hiding a feature from disabling it while showing a tooltip.
+- `permissionId` connects RBAC to UI elements without duplicating permission codes in frontends.
+- `description` documents menu purpose for operators, while `metadata` (JSON) carries per-item flags (badges, experiment toggles, deep links) without forcing schema changes.
+- Every field is optional where appropriate, so lean deployments can omit unused metadata while preserving the flexibility for future SaaS tenants.
+
+**Menu Types:**
+
+| Type | Use Case | Examples |
+|------|----------|----------|
+| **MENU** | Sidebar navigation | "Products", "Bookings", "Reports" |
+| **BUTTON** | Action buttons | "Add Product", "Delete", "Export", "Approve" |
+| **TAB** | Tab navigation | "Basic Info", "Pricing", "Settings" |
+
+**Hybrid Permission Model:**
+
+```typescript
+// Menu WITHOUT permission (pure UI)
+{
+  code: 'menu.dashboard',
+  type: 'MENU',
+  name: 'Dashboard',
+  permissionId: null // Just navigation, no API
+}
+
+// Menu WITH permission (UI + backend)
+{
+  code: 'menu.products',
+  type: 'MENU',
+  name: 'Products',
+  permissionId: permission('product.read') // Needs API permission
+}
+
+// Multiple menus, SAME permission (reusable)
+{
+  code: 'btn.product.create.list',
+  type: 'BUTTON',
+  permissionId: permission('product.create')
+}
+{
+  code: 'btn.product.create.dashboard',
+  type: 'BUTTON',
+  permissionId: permission('product.create') // Same permission!
+}
+```
+
+### 3.2 RoleMenu
+
+```prisma
+model RoleMenu {
+  id     Int @id @default(autoincrement())
+  roleId Int
+  menuId Int
+  
+  role Role @relation(fields: [roleId], references: [id])
+  menu Menu @relation(fields: [menuId], references: [id])
+  
+  @@unique([roleId, menuId])
+}
+```
+
+**Features:**
+- ✅ Assign menus to roles
+- ✅ Different roles see different UI elements
+- ✅ Admin can manage without code changes
+
+**Benefits of Menu System:**
+
+| Feature | Traditional Hardcoded UI | Menu System |
+|---------|-------------------------|-------------|
+| Add new button | Code change + deploy | Insert DB row |
+| Change menu order | Code change | Update sortOrder |
+| Role-based UI | Hardcoded checks | Load from DB |
+| Multi-language | Hardcoded translations | Store nameEn field |
+| A/B testing | Feature flags | Toggle isVisible |
+
+**Example: Frontend Usage**
+
+```typescript
+// Load user's menus
+const menus = await api.get('/api/auth/menus');
+
+// Render sidebar
+{menus.filter(m => m.type === 'MENU').map(menu => (
+  <SidebarItem icon={menu.icon} label={menu.name} to={menu.path} />
+))}
+
+// Render action buttons
+{menus.some(m => m.code === 'btn.product.create') && (
+  <Button onClick={handleCreate}>Add Product</Button>
+)}
+
+// Render tabs
+{menus.filter(m => m.type === 'TAB' && m.parentId === currentMenu).map(tab => (
+  <Tab>{tab.name}</Tab>
+))}
+```
+
+---
+
+## 4. ACCESS CONTROL ARCHITECTURE
+
+### 3.1 Scope-Based Access Control
 
 **Core Concept:** Automatic data filtering based on user's scope (GLOBAL, ORGANIZATION, or USER level).
 
@@ -227,93 +469,139 @@ enum ScopeType {
 }
 ```
 
-**Scope Determination (by UserRole):**
+**Scope Determination (by Role.dataScope):**
 
-| UserRole | ScopeType | organizationId | Access Level |
-|----------|-----------|----------------|--------------|
-| `KIGGLE_ADMIN` | GLOBAL | null | All data |
-| `KIGGLE_STAFF` | GLOBAL | null | All data (read-only) |
-| `PARTNER_ADMIN` | ORGANIZATION | X | Organization X data |
-| `PARTNER_STAFF` | ORGANIZATION | X | Organization X data |
-| `TUTOR` | ORGANIZATION | X | Organization X data |
-| `PARENT` | USER | null | Public + own data |
+| UserRole (DB Role.name) | ScopeType (Role.dataScope) | organizationId (from OrganizationMember) | Access Level |
+|-------------------------|----------------------------|-------------------------------------------|--------------|
+| `kiggle_admin` | GLOBAL | null | All data |
+| `kiggle_staff` | GLOBAL | null | All data (read-only) |
+| `partner_admin` | ORGANIZATION | X | Organization X data |
+| `partner_staff` | ORGANIZATION | X | Organization X data |
+| `tutor` | ORGANIZATION | X | Organization X data |
+| `parent` | USER | null | Public + own data |
 
-**How It Works:**
+**How It Works (Runtime Flow):**
 
-1. **User logs in** → JWT contains `userId` + `role`
-2. **System determines scope:**
-   ```typescript
-   if (role === 'KIGGLE_ADMIN') {
-     scope = { type: GLOBAL, userId }
-   } else if (role === 'PARTNER_ADMIN') {
-     scope = { type: ORGANIZATION, userId, organizationId }
-   } else if (role === 'PARENT') {
-     scope = { type: USER, userId }
-   }
-   ```
-3. **Repository auto-filters queries:**
+1. **User logs in** → JWT contains `userId` + `role` (role name from `Role`)
+2. **UserContextService**:
+   - Loads all `UserRole` rows for the user
+   - Aggregates `Role.dataScope` (priority: `GLOBAL` > `ORGANIZATION` > `USER`)
+   - Resolves `organizationId` from `OrganizationMember` (if any)
+3. **DataScopeContext** (request-scoped) is initialized by `ScopeInterceptor` using `UserContext.dataScope`
+4. **Repositories** rely on `DataScopeContext` helpers:
    ```typescript
    // Products for organization members
-   WHERE products.organizationId = scope.organizationId
+   const where = dataScopeContext.getOrganizationFilter();
+   return this.prisma.product.findMany({ where });
    
    // Bookings for parents
-   WHERE bookings.parentId = scope.userId
+   const where = dataScopeContext.getParentFilter();
+   return this.prisma.booking.findMany({ where });
    
-   // No filter for platform admins
+   // Admins (GLOBAL) → filters are empty objects ⇒ see all data
    ```
 
-### 2.2 Permission Check (Simple)
+### 3.2 Hybrid Model: RBAC + Scope
 
-**System-Level (UserRole enum):**
-```typescript
-// Platform admin actions
-if (user.role === 'KIGGLE_ADMIN') {
-  // Can do anything
-}
+**For fine-grained permission management**, the system implements full RBAC with:
 
-// Parent actions
-if (user.role === 'PARENT') {
-  // Can only manage own children and bookings
-}
-```
+#### 4 Additional Tables:
+1. **roles** - Role definitions (business roles)
+2. **permissions** - Permission definitions  
+3. **role_permissions** - Many-to-many mapping Role ↔ Permission
+4. **user_roles** - User role assignments (single source of truth for roles)
 
-**Organization-Level (OrganizationMemberRole + flags):**
-```typescript
-// Check organization membership
-const member = await getOrganizationMember(userId, organizationId);
-
-// Check role
-if (member.role === 'ADMIN') {
-  // Admins can do everything in their organization
-  return true;
-}
-
-// Check specific permission flag
-if (action === 'manage_products' && member.canManageProducts) {
-  return true;
+#### Data Scope Types:
+```prisma
+enum ScopeType {
+  GLOBAL       // Platform admins - see all data (e.g., KIGGLE_ADMIN)
+  ORGANIZATION // Partners/tutors - see only their org (e.g., PARTNER_ADMIN, TUTOR)
+  USER         // Parents - see only own data
 }
 ```
 
-**No Complex RBAC Needed:**
-- ✅ Simple role enums (UserRole, OrganizationMemberRole)
-- ✅ Boolean permission flags on OrganizationMember
+**Note:** Data scope is **role-based** via `Role.dataScope`.  
+Organization membership is modeled separately in `OrganizationMember`:
+- A user belongs to at most one organization via `OrganizationMember`
+- Roles are assigned via `UserRole` and determine data scope, not the organization itself
+
+#### Permission Naming Convention:
+```
+{resource}.{action}
+
+Examples:
+- product.create
+- product.read
+- product.update
+- product.delete
+- booking.approve
+- report.export
+- member.manage
+- *.* (admin wildcard)
+```
+
+#### Usage Examples:
+
+**Check Permission (in code):**
+```typescript
+// Decorator-based (recommended)
+@RequirePermission('product.create')
+async createProduct() { }
+
+// Programmatic check
+if (await hasPermission(user, 'report.export')) {
+  // Allow export
+}
+
+// UI visibility check
+<Button show={hasPermission('booking.approve')}>
+  Approve Booking
+</Button>
+```
+
+**Assign Role to User (UserRole):**
+```typescript
+// Assign role to user
+await prisma.userRole.create({
+  data: {
+    userId: 1,
+    roleId: kiggleAdminRoleId,
+  },
+});
+
+// Ensure uniqueness per (user, role)
+model UserRole {
+  id     Int @id @default(autoincrement())
+  userId Int
+  roleId Int
+
+  @@unique([userId, roleId]) // A user can have same role only once
+}
+```
+
+**Benefits:**
+- ✅ Fine-grained action permissions (UI buttons, menu items, exports)
+- ✅ Easy to add/modify permissions without code changes
+- ✅ Supports both system-wide and organization-scoped roles
+- ✅ Permission caching in Redis for performance
+- ✅ Temporary role assignments (with expiresAt)
 - ✅ Scope-based automatic filtering
 - ✅ Easy to understand and maintain
 
 ### 2.3 Benefits vs Traditional RBAC
 
-| Feature | Traditional RBAC | Scope-Based |
-|---------|------------------|-------------|
-| **Tables** | 4+ tables | 0 extra tables |
-| **Complexity** | High (dynamic roles/permissions) | Low (enums + flags) |
-| **Performance** | Multiple joins for permission check | Direct field access |
-| **Maintenance** | Hard (permission matrix) | Easy (add boolean flag) |
-| **Data Access** | Manual filtering | Automatic filtering |
-| **Code in Services** | 30-50 lines per method | 0 lines (automatic) |
+| Feature | Traditional RBAC Only | Hybrid RBAC + Data Scope |
+|---------|-----------------------|---------------------------|
+| **Tables** | 4+ tables | 4 tables (Role, Permission, RolePermission, UserRole) |
+| **Complexity** | High (dynamic roles/permissions) | Medium (RBAC + dataScope per role) |
+| **Performance** | Multiple joins per request | Permissions cached in Redis + lightweight joins |
+| **Maintenance** | Hard (permission matrix) | Easier (menu-based permissions + DB-driven roles) |
+| **Data Access** | Manual filtering | Automatic filtering via `DataScopeContext` |
+| **Code in Services** | Many manual checks | Thin services, repositories use helpers |
 
 ---
 
-## 3. PRODUCT MANAGEMENT MODULE
+## 5. PRODUCT MANAGEMENT MODULE
 
 ### 3.1 Product
 
@@ -403,7 +691,7 @@ model ProductImage {
 
 ---
 
-## 4. COMMUNICATION MODULE
+## 6. COMMUNICATION MODULE
 
 ### 4.1 Conversation
 
@@ -485,7 +773,7 @@ PENDING → ACCEPTED → Convert to Booking
 
 ---
 
-## 5. BOOKING & SCHEDULE MODULE
+## 7. BOOKING & SCHEDULE MODULE
 
 ### 5.1 Booking
 
@@ -573,7 +861,7 @@ model ScheduleSlot {
 
 ---
 
-## 6. PAYMENT & SUBSCRIPTION MODULE
+## 8. PAYMENT & SUBSCRIPTION MODULE
 
 ### 6.1 SubscriptionPackage
 
@@ -665,7 +953,7 @@ model Payment {
 
 ---
 
-## 7. CONTENT MANAGEMENT MODULE
+## 9. CONTENT MANAGEMENT MODULE
 
 ### 7.1 Banner
 
@@ -777,10 +1065,10 @@ model Review {
 ### 1. Authentication & Authorization
 - ✅ Password hashing (bcrypt)
 - ✅ JWT tokens (access + refresh)
-- ✅ Scope-based access control (automatic data filtering)
-- ✅ Simple role-based permissions (enums + flags)
-- ✅ Organization-scoped data access
-- ✅ No complex RBAC needed
+- ✅ Hybrid RBAC + DataScopeContext (automatic data filtering)
+- ✅ Database-driven roles & permissions (Role, Permission, UserRole, RoleMenu)
+- ✅ Menu-based UI permissions + API permissions
+- ✅ Organization membership isolation via `OrganizationMember`
 
 ### 2. Data Protection
 - ✅ Email/Phone verification
@@ -897,116 +1185,81 @@ Archive old data to cold storage:
 ### 1. Scope-Based Filtering (Automatic)
 
 ```typescript
-// In ScopeContext Service
-export class ScopeContext {
-  initialize(user: any): void {
-    // Platform admin - GLOBAL scope
-    if (user.role === 'KIGGLE_ADMIN' || user.role === 'KIGGLE_STAFF') {
-      this._scope = {
-        type: ScopeType.GLOBAL,
-        userId: user.userId,
-      };
-      return;
-    }
+// DataScopeContext (request-scoped)
+@Injectable({ scope: Scope.REQUEST })
+export class DataScopeContext {
+  private context: UserContext | null = null;
+  private type: DataScopeType | null = null;
 
-    // Partner/Tutor - ORGANIZATION scope
-    if (user.role === 'PARTNER_ADMIN' || user.role === 'PARTNER_STAFF' || user.role === 'TUTOR') {
-      this._scope = {
-        type: ScopeType.ORGANIZATION,
-        userId: user.userId,
-        organizationId: user.organizationId,
-      };
-      return;
-    }
-
-    // Parent - USER scope
-    if (user.role === 'PARENT') {
-      this._scope = {
-        type: ScopeType.USER,
-        userId: user.userId,
-      };
-    }
+  initialize(userContext: UserContext) {
+    this.context = userContext;
+    this.type = this.mapDataScopeType(userContext.dataScope);
   }
+
+  getOrganizationFilter() {
+    if (this.type === DataScopeType.ORGANIZATION && this.context?.organizationId) {
+      return { organizationId: this.context.organizationId };
+    }
+    return {};
+  }
+
+  getParentFilter() {
+    if (this.type === DataScopeType.USER) {
+      return { parentId: this.context!.userId };
+    }
+    return {};
+  }
+
+  applyFilter(where: Prisma.ProductWhereInput = {}) {
+    if (this.type === DataScopeType.GLOBAL) return where;
+    if (this.type === DataScopeType.ORGANIZATION) {
+      return { ...where, organizationId: this.context!.organizationId };
+    }
+    return { ...where, status: ProductStatus.ACTIVE };
+  }
+
+  // mapDataScopeType(...) omitted for brevity
 }
 
-// In Repository
+// Repository usage
 export class ProductsRepository {
-  applyScope(where: any, scope: QueryScope): any {
-    if (scope.type === ScopeType.GLOBAL) {
-      return where; // No filter
-    }
-    
-    if (scope.type === ScopeType.ORGANIZATION) {
-      return { ...where, organizationId: scope.organizationId }; // Auto-filter
-    }
-    
-    if (scope.type === ScopeType.USER) {
-      return { ...where, status: 'ACTIVE' }; // Public products only
-    }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly dataScopeContext: DataScopeContext,
+  ) {}
+
+  async findMany(where: Prisma.ProductWhereInput = {}) {
+    return this.prisma.product.findMany({
+      where: this.dataScopeContext.applyFilter(where),
+    });
   }
 }
 ```
 
-### 2. Permission Check (Simple)
+### 2. Permission Check (RBAC)
 
 ```typescript
-// Check organization-level permissions
-async function hasOrganizationPermission(
-  userId: number,
-  organizationId: number,
-  permission: 'canManageProducts' | 'canManageBookings' | 'canManageMembers' | 'canViewReports'
-): Promise<boolean> {
-  const member = await prisma.organizationMember.findUnique({
-    where: { 
-      userId_organizationId: { userId, organizationId } 
-    },
-  });
-  
-  if (!member) return false;
-  
-  // Admins have all permissions
-  if (member.role === 'ADMIN') return true;
-  
-  // Check specific permission flag
-  return member[permission] === true;
+// Decorator-based usage
+@RequirePermission('product.create')
+async create(@Body() dto: CreateProductRequest) {
+  return this.productsService.create(dto);
 }
 
-// Usage in service
-if (await hasOrganizationPermission(userId, orgId, 'canManageProducts')) {
-  // Allow product creation
+// Programmatic usage
+if (!(await this.permissionService.hasPermission(userId, 'report.export'))) {
+  throw new ForbiddenException();
 }
 ```
 
-### 3. Member Management Examples
+### 3. Assign Role to User
 
 ```typescript
-// Create organization member with permissions
-await prisma.organizationMember.create({
+// Map from DTO enum to database role name
+const role = await this.prisma.role.findUnique({ where: { name: 'partner_admin' } });
+await this.prisma.userRole.create({
   data: {
     userId: user.id,
-    organizationId: org.id,
-    role: 'STAFF',
-    canManageProducts: true,
-    canManageBookings: true,
-    canManageMembers: false, // Staff cannot manage members
-    canViewReports: false,
-  },
-});
-
-// Update member permissions
-await prisma.organizationMember.update({
-  where: { id: memberId },
-  data: {
-    canViewReports: true, // Grant report access
-  },
-});
-
-// Promote to admin (auto-grant all permissions)
-await prisma.organizationMember.update({
-  where: { id: memberId },
-  data: {
-    role: 'ADMIN',
-    // All permissions automatically granted by role
+    roleId: role.id,
   },
 });
 ```
@@ -1017,25 +1270,29 @@ await prisma.organizationMember.update({
 
 | Metric | Count |
 |--------|-------|
-| **Total Tables** | 22 |
-| **Total Enums** | 25 |
-| **Total Indexes** | 80+ |
-| **Total Relations** | 50+ |
+| **Total Tables** | 28 |
+| **Total Enums** | 27 |
+| **Total Indexes** | 100+ |
+| **Total Relations** | 65+ |
 | **User Tables** | 6 |
+| **RBAC Tables** | 4 |
+| **Menu System** | 2 |
 | **Product Tables** | 4 |
 | **Communication Tables** | 3 |
 | **Booking Tables** | 3 |
 | **Payment Tables** | 3 |
 | **Content Tables** | 3 |
 
-**Note:** No separate RBAC tables needed - using simple enums + boolean flags instead.
+**Note:** Hybrid model combining RBAC (permissions) + Menu system (UI) + Scope-based access control (data isolation).
 
 ---
 
 ## Related Documentation
 
+- [Data Scope Context](./DATA_SCOPE_CONTEXT.md) - Request-scoped data filtering service
+- [Menu-Based Permissions](./MENU_BASED_PERMISSIONS.md) - Menu system + Permission hybrid approach
 - [Database ERD](./DATABASE_ERD.md) - Entity Relationship Diagrams
-- [API Flow](./API_FLOW.md) - API Flow Documentation
+- [DB User & Authorization Evaluation](./DB_USER_AUTHORIZATION_EVALUATION.md) - In-depth analysis
 
 ---
 

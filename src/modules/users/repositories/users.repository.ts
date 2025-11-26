@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@/infrastructure';
 import { User } from '../entities/user.entity';
-import { UserRole, UserStatus } from '@/common/constants';
+import { UserStatus } from '@/common/constants';
 import { Prisma } from '@prisma/client';
 import { UserMapper } from '../mappers/user.mapper';
 
 export interface FindUsersOptions {
-  role?: UserRole;
+  role?: string; // Role name from Role table (not enum)
   status?: UserStatus;
   search?: string;
   skip?: number;
@@ -83,8 +83,16 @@ export class UsersRepository {
       deletedAt: null, // Only non-deleted users
     };
 
+    // Filter by role via UserRole (if role name provided)
     if (role) {
-      where.role = role;
+      where.userRoles = {
+        some: {
+          role: {
+            name: role,
+          },
+          expiresAt: null, // Only non-expired roles
+        },
+      };
     }
 
     if (status) {
@@ -157,6 +165,26 @@ export class UsersRepository {
     await this.prisma.user.delete({
       where: { id },
     });
+  }
+
+  /**
+   * Get primary role name for user (from UserRole)
+   */
+  async getPrimaryRoleName(userId: number): Promise<string | null> {
+    const userRole = await this.prisma.userRole.findFirst({
+      where: {
+        userId,
+        expiresAt: null, // Not expired
+      },
+      include: {
+        role: true,
+      },
+      orderBy: {
+        assignedAt: 'desc', // Most recent
+      },
+    });
+
+    return userRole?.role.name || null;
   }
 
   /**

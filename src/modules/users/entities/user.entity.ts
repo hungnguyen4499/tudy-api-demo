@@ -1,16 +1,17 @@
-import { UserRole, UserStatus } from '@/common/constants';
+import { UserStatus } from '@/common/constants';
 
 /**
  * User Entity
  * Domain model representing a User
  * Independent of database/ORM implementation
+ * 
+ * Note: User roles are managed via UserRole (RBAC), not stored in User entity
  */
 export class User {
   id: number;
   email: string;
   phone?: string;
   passwordHash: string;
-  role: UserRole;
   firstName: string;
   lastName: string;
   avatarUrl?: string;

@@ -22,7 +22,12 @@ export class UsersService {
       throw new BusinessException(ErrorCodes.USER_NOT_FOUND);
     }
 
-    return this.userMapper.toResponse(user);
+    // Get primary role from UserRole
+    const roleName = await this.usersRepository.getPrimaryRoleName(id);
+    const response = this.userMapper.toResponse(user);
+    response.role = roleName || 'parent'; // Default fallback
+
+    return response;
   }
 
   /**
@@ -39,8 +44,18 @@ export class UsersService {
       take: query.take,
     });
 
+    // Load roles for all users
+    const items = await Promise.all(
+      result.users.map(async (user) => {
+        const roleName = await this.usersRepository.getPrimaryRoleName(user.id);
+        const response = this.userMapper.toResponse(user);
+        response.role = roleName || 'parent'; // Default fallback
+        return response;
+      }),
+    );
+
     return {
-      items: this.userMapper.toResponseList(result.users),
+      items,
       page,
       pageSize,
       total: result.total,
@@ -51,53 +66,36 @@ export class UsersService {
    * Update user
    */
   async update(id: number, request: UpdateUserRequest): Promise<UserResponse> {
-    // Check if user exists
     const existingUser = await this.usersRepository.findById(id);
 
     if (!existingUser || existingUser.isDeleted) {
       throw new BusinessException(ErrorCodes.USER_NOT_FOUND);
     }
 
-    // Check if phone is being updated and already exists
+    // Check phone uniqueness
     if (request.phone && request.phone !== existingUser.phone) {
-      const phoneExists = await this.usersRepository.phoneExists(
-        request.phone,
-        id,
-      );
-
+      const phoneExists = await this.usersRepository.phoneExists(request.phone, id);
       if (phoneExists) {
         throw new BusinessException(ErrorCodes.PHONE_ALREADY_EXISTS);
       }
     }
 
-    // Prepare update data
-    const updateData: any = {};
-
-    if (request.firstName !== undefined)
-      updateData.firstName = request.firstName;
-    if (request.lastName !== undefined) updateData.lastName = request.lastName;
-    if (request.avatarUrl !== undefined)
-      updateData.avatarUrl = request.avatarUrl;
-    if (request.gender !== undefined) updateData.gender = request.gender;
-    if (request.dateOfBirth !== undefined)
-      updateData.dateOfBirth = new Date(request.dateOfBirth);
-    if (request.address !== undefined) updateData.address = request.address;
-    if (request.city !== undefined) updateData.city = request.city;
-    if (request.district !== undefined) updateData.district = request.district;
-    if (request.ward !== undefined) updateData.ward = request.ward;
-    if (request.phone !== undefined) updateData.phone = request.phone;
-    if (request.status !== undefined) updateData.status = request.status;
-
-    // Update user
+    // Build update data
+    const updateData = this.buildUpdateData(request);
     const updatedUser = await this.usersRepository.update(id, updateData);
 
-    return this.userMapper.toResponse(updatedUser);
+    // Get primary role from UserRole
+    const roleName = await this.usersRepository.getPrimaryRoleName(id);
+    const response = this.userMapper.toResponse(updatedUser);
+    response.role = roleName || 'parent'; // Default fallback
+
+    return response;
   }
 
   /**
    * Soft delete user
    */
-  async remove(id: number): Promise<void> {
+  async delete(id: number): Promise<void> {
     const user = await this.usersRepository.findById(id);
 
     if (!user || user.isDeleted) {
@@ -106,5 +104,26 @@ export class UsersService {
 
     // Soft delete
     await this.usersRepository.softDelete(id);
+  }
+
+  /**
+   * Build update data from request
+   */
+  private buildUpdateData(request: UpdateUserRequest): Record<string, unknown> {
+    const data: Record<string, unknown> = {};
+
+    if (request.firstName !== undefined) data.firstName = request.firstName;
+    if (request.lastName !== undefined) data.lastName = request.lastName;
+    if (request.avatarUrl !== undefined) data.avatarUrl = request.avatarUrl;
+    if (request.gender !== undefined) data.gender = request.gender;
+    if (request.dateOfBirth !== undefined) data.dateOfBirth = new Date(request.dateOfBirth);
+    if (request.address !== undefined) data.address = request.address;
+    if (request.city !== undefined) data.city = request.city;
+    if (request.district !== undefined) data.district = request.district;
+    if (request.ward !== undefined) data.ward = request.ward;
+    if (request.phone !== undefined) data.phone = request.phone;
+    if (request.status !== undefined) data.status = request.status;
+
+    return data;
   }
 }

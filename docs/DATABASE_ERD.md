@@ -16,14 +16,13 @@ erDiagram
     Parent ||--|{ Child : "manages"
     Tutor }o--|| Organization : "belongs to"
     OrganizationMember }o--|| Organization : "belongs to"
-    Tutor ||--o| OrganizationMember : "can be"
+    Tutor ||--o| OrganizationMember : "is membership record"
     
     User {
         int id PK
         string email UK
         string phone UK
         string passwordHash
-        enum role
         enum status
         datetime createdAt
         datetime updatedAt
@@ -70,11 +69,7 @@ erDiagram
         int id PK
         int userId FK
         int organizationId FK
-        enum role
-        boolean canManageProducts
-        boolean canManageBookings
-        boolean canManageMembers
-        boolean canViewReports
+        datetime joinedAt
     }
 ```
 
@@ -82,73 +77,130 @@ erDiagram
 - User is the central table with 3 profile types: Parent, Tutor, OrganizationMember
 - Parent manages multiple Children
 - **Tutor always belongs to Organization** (INDIVIDUAL or COMPANY type)
-- Organization has multiple members with roles + permission flags
-- **Simple permission system:** Enums + boolean flags (no complex RBAC tables)
+- Organization membership is tracked via `OrganizationMember` (one organization per user)
+- Authorization/permissions are handled by RBAC tables (see section 2)
 
 ---
 
-## 2. ACCESS CONTROL (SCOPE-BASED)
+## 2. RBAC (Role-Based Access Control) MODELS
 
-**No separate RBAC tables needed!** Instead, we use:
-
-### Simple Role System
-
-```typescript
-// System-level roles (User.role enum)
-enum UserRole {
-  PARENT           // Marketplace customer
-  TUTOR            // Individual or employed tutor
-  PARTNER_STAFF    // Organization staff
-  PARTNER_ADMIN    // Organization admin
-  KIGGLE_STAFF     // Platform staff
-  KIGGLE_ADMIN     // Platform admin
-}
-
-// Organization-level roles (OrganizationMember.role enum)
-enum OrganizationMemberRole {
-  STAFF   // Regular staff
-  ADMIN   // Organization admin
-}
-
-// Organization-level permissions (OrganizationMember fields)
-{
-  canManageProducts: boolean  // Create, edit, delete products
-  canManageBookings: boolean  // Manage bookings
-  canManageMembers: boolean   // Invite, remove members
-  canViewReports: boolean     // Access analytics
-}
+```mermaid
+erDiagram
+    User ||--o{ UserRole : "has"
+    Role ||--o{ UserRole : "assigned to"
+    Role ||--o{ RolePermission : "has"
+    Permission ||--o{ RolePermission : "granted to"
+    Role ||--o{ RoleMenu : "grants menu"
+    Menu ||--o{ RoleMenu : "visible to"
+    
+    User {
+        int id PK
+        string email UK
+        string phone UK
+        enum status
+    }
+    
+    Role {
+        int id PK
+        string name UK
+        string displayName
+        enum dataScope
+        boolean isSystem
+    }
+    
+    UserRole {
+        int id PK
+        int userId FK
+        int roleId FK
+        datetime assignedAt
+        datetime expiresAt "nullable"
+    }
+    
+    Permission {
+        int id PK
+        string code UK
+        string resource
+        string action
+        string displayName
+    }
+    
+    RolePermission {
+        int id PK
+        int roleId FK
+        int permissionId FK
+    }
+    
+    Menu {
+        int id PK
+        string code UK
+        enum type
+        string path
+        string component
+    }
+    
+    RoleMenu {
+        int id PK
+        int roleId FK
+        int menuId FK
+    }
 ```
 
-### Scope-Based Data Filtering
+**Key Features:**
+- ✅ **Fine-grained permissions**: `product.create`, `booking.approve`, `report.export`
+- ✅ **Data scopes per role** (`Role.dataScope`): GLOBAL / ORGANIZATION / USER
+- ✅ **UserRole** is single source of truth for role assignments (no org field)
+- ✅ **Menu integration**: Roles control API permissions + UI visibility
+- ✅ **Cached**: Permissions/menu codes loaded once and cached in Redis
 
-```typescript
-// Automatic filtering at repository level
-if (user.role === 'KIGGLE_ADMIN') {
-  // GLOBAL scope - see all data
-  WHERE /* no filter */
-}
-
-if (user.role === 'PARTNER_ADMIN') {
-  // ORGANIZATION scope - see only own org
-  WHERE organizationId = user.organizationId
-}
-
-if (user.role === 'PARENT') {
-  // USER scope - see public + own data
-  WHERE status = 'ACTIVE' OR userId = user.userId
-}
-```
-
-**Benefits:**
-- ✅ No complex joins for permission checks
-- ✅ No 4 extra RBAC tables
-- ✅ Simple to understand and maintain
-- ✅ Automatic data filtering (scope-based)
-- ✅ Easy to extend (add more boolean flags)
+**Permission Naming**: `{resource}.{action}` (e.g., `product.create`, `booking.update`)
 
 ---
 
-## 3. PRODUCT & CATEGORY MODELS
+## 3. ACCESS CONTROL (HYBRID: RBAC + SCOPE)
+
+### RBAC Component (What can user DO?)
+
+```typescript
+// Check action permissions
+@RequirePermission('product.create')
+async createProduct() { }
+
+// UI visibility
+<Button show={hasPermission('report.export')}>Export</Button>
+```
+
+### Scope Component (What DATA can user access?)
+
+```typescript
+// Initialized per request by ScopeInterceptor
+const ctx = await dataScopeContext.applyFilter();
+
+// Example repository usage
+return this.prisma.product.findMany({
+  where: dataScopeContext.getOrganizationFilter(), // ORGANIZATION scope
+});
+
+return this.prisma.booking.findMany({
+  where: dataScopeContext.getParentFilter(), // USER scope
+});
+```
+
+**How it works:**
+1. `UserContextService` loads roles, permissions, menu codes, organizationId
+2. `Role.dataScope` determines GLOBAL / ORGANIZATION / USER
+3. `DataScopeContext` stores aggregated data scope per request
+4. Repositories/services use helper methods for consistent filtering
+
+**Hybrid Benefits:**
+- ✅ **RBAC**: Fine-grained UI permissions, button visibility, action control
+- ✅ **Data scope**: Multi-tenant isolation via `DataScopeContext`
+- ✅ **Performance**: Permissions & scopes cached, filters applied at DB layer
+- ✅ **Security**: Double-layer protection (permission + data access)
+- ✅ **Maintainable**: Add permissions or change scopes without code changes
+
+---
+
+## 4. PRODUCT & CATEGORY MODELS
 
 ```mermaid
 erDiagram
@@ -205,7 +257,7 @@ erDiagram
 
 ---
 
-## 4. COMMUNICATION & CONSULTATION
+## 5. COMMUNICATION & CONSULTATION
 
 ```mermaid
 erDiagram
@@ -261,7 +313,7 @@ erDiagram
 
 ---
 
-## 5. BOOKING & SCHEDULE SYSTEM
+## 6. BOOKING & SCHEDULE SYSTEM
 
 ```mermaid
 erDiagram
@@ -322,7 +374,7 @@ erDiagram
 
 ---
 
-## 6. PAYMENT & SUBSCRIPTION
+## 7. PAYMENT & SUBSCRIPTION
 
 ```mermaid
 erDiagram
@@ -376,7 +428,7 @@ erDiagram
 
 ---
 
-## 7. CONTENT & REVIEW SYSTEM
+## 8. CONTENT & REVIEW SYSTEM
 
 ```mermaid
 erDiagram
@@ -433,7 +485,7 @@ erDiagram
 
 ---
 
-## 8. COMPLETE SYSTEM OVERVIEW
+## 9. COMPLETE SYSTEM OVERVIEW
 
 ```mermaid
 graph TB
@@ -519,14 +571,15 @@ graph TB
 | Module | Tables | Description |
 |--------|--------|-------------|
 | User Management | 6 | User, Parent, Child, Tutor, Organization, OrganizationMember |
+| RBAC System | 4 | Role, Permission, RolePermission, UserRole |
 | Product Management | 4 | Product, Category, ProductCategory, ProductImage |
 | Communication | 3 | Conversation, Message, Consultation |
 | Booking & Schedule | 3 | Booking, Schedule, ScheduleSlot |
 | Payment & Subscription | 3 | Payment, Subscription, SubscriptionPackage |
 | Content & Review | 3 | Banner, Notification, Review |
-| **Total** | **22** | |
+| **Total** | **26** | |
 
-**Note:** No separate RBAC tables - using simple enums + boolean permission flags instead.
+**Note:** Hybrid model with full RBAC (fine-grained permissions) + Scope-based access control (data isolation).
 
 ### Enums Count
 
@@ -558,8 +611,8 @@ graph TB
 - `Product` → `ProductImage`
 - `Conversation` → `Message`
 - `Booking` → `Schedule`
-- `User` → `RoleAssignment`
-- `Role` → `RoleAssignment`
+- `User` → `UserRole`
+- `Role` → `UserRole`
 
 ### Many-to-Many Relationships
 - `Product` ↔ `Category` (through `ProductCategory`)
@@ -569,7 +622,6 @@ graph TB
 - `Product` → `Tutor` OR `Organization` (owner)
 - `Booking` → `Tutor` OR `Organization` (provider)
 - `Conversation` → `Tutor` OR `Organization` (participant)
-- `RoleAssignment` → `Organization` (optional scope)
 
 ---
 
@@ -626,10 +678,10 @@ Entities with status workflows:
 ### 6. RBAC Pattern
 ```
 Role-Based Access Control:
-- User → RoleAssignment → Role → RolePermission → Permission
-- Support for global and organization-scoped permissions
-- Temporary role assignments with expiration
-- System roles protection
+- User → UserRole → Role → RolePermission → Permission
+- Role.dataScope drives GLOBAL / ORGANIZATION / USER access
+- Organization membership tracked separately via OrganizationMember
+- Permissions + menu visibility cached in Redis
 ```
 
 ---
@@ -711,14 +763,13 @@ Redis cache for:
 ```sql
 CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_phone ON users(phone);
-CREATE INDEX idx_users_role_status ON users(role, status);
+CREATE INDEX idx_users_status ON users(status);
 ```
 
 **Organization Members:**
 ```sql
 CREATE INDEX idx_organization_members_user ON organization_members(user_id);
 CREATE INDEX idx_organization_members_org ON organization_members(organization_id);
-CREATE INDEX idx_organization_members_role ON organization_members(role);
 ```
 
 **Products:**

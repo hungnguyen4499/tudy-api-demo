@@ -1,4 +1,9 @@
-import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleInit,
+  OnModuleDestroy,
+  Logger,
+} from '@nestjs/common';
 import { RedisConfigService } from '@/config';
 import Redis from 'ioredis';
 
@@ -16,7 +21,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   async onModuleInit() {
     try {
       const config = this.redisConfig.getConfig();
-      
+
       this.client = new Redis({
         host: config.host,
         port: config.port,
@@ -62,7 +67,11 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   /**
    * Set key with optional TTL (seconds)
    */
-  async set(key: string, value: string | number | Buffer, ttl?: number): Promise<void> {
+  async set(
+    key: string,
+    value: string | number | Buffer,
+    ttl?: number,
+  ): Promise<void> {
     if (ttl) {
       await this.client.setex(key, ttl, value);
     } else {
@@ -114,4 +123,3 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     await this.client.flushdb();
   }
 }
-

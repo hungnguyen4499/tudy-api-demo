@@ -1,13 +1,13 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional, IsEnum, IsString } from 'class-validator';
 import { PaginationDto } from '@/common/dto/pagination.dto';
-import { UserRole, UserStatus } from '@/common/constants';
+import { UserStatus } from '@/common/constants';
 
 export class UsersQuery extends PaginationDto {
-  @ApiPropertyOptional({ description: 'Filter by role', enum: UserRole })
+  @ApiPropertyOptional({ description: 'Filter by role name (e.g., "parent", "partner_admin")' })
   @IsOptional()
-  @IsEnum(UserRole)
-  role?: UserRole;
+  @IsString()
+  role?: string; // Role name from Role table, not enum
 
   @ApiPropertyOptional({ description: 'Filter by status', enum: UserStatus })
   @IsOptional()
